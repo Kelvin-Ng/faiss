@@ -48,6 +48,7 @@ aa('--add_bs', default=-1, type=int,
    help='add elements index by batches of this size')
 aa('--link_singletons', default=False, action='store_true',
    help='do a pass to link in the singletons')
+aa('--decoded_data', default='', help='Path to decoded data in fvecs. Note: if this is set, it is likely that you want an HNSW without PQ etc.')
 
 group = parser.add_argument_group(
     'searching (reconstruct_from_neighbors options)')
@@ -90,6 +91,12 @@ print "args:", args
 xt, xb, xq, gt = datasets.load_data(
     dataset=args.db, compute_gt=args.compute_gt)
 
+if args.decoded_data != '':
+    xdb = np.fromfile(args.decoded_data, dtype=np.float32).reshape(xb.shape)
+    xdt = xdb[:xt.shape[0]]
+    xdq = xdb[xt.shape[0]:]
+
+nt, d = xt.shape
 nq, d = xq.shape
 nb, d = xb.shape
 
@@ -137,7 +144,10 @@ else:
         print "set level 0 nb of neighbors to", args.M0
         hnsw.set_nb_neighbors(0, args.M0)
 
-    xt2 = sanitize(xt[:args.maxtrain])
+    if args.decoded_data == '':
+        xt2 = sanitize(xt[:args.maxtrain])
+    else:
+        xt2 = sanitize(xdt[:args.maxtrain])
     assert np.all(np.isfinite(xt2))
 
     print "train, size", xt.shape
@@ -148,12 +158,18 @@ else:
     print "adding"
     t0 = time.time()
     if args.add_bs == -1:
-        index.add(sanitize(xb))
+        if args.decoded_data == '':
+            index.add(sanitize(xb))
+        else:
+            index.add(sanitize(xdb))
     else:
         for i0 in range(0, nb, args.add_bs):
             i1 = min(nb, i0 + args.add_bs)
             print "  adding %d:%d / %d" % (i0, i1, nb)
-            index.add(sanitize(xb[i0:i1]))
+            if args.decoded_data == '':
+                index.add(sanitize(xb[i0:i1]))
+            else:
+                index.add(sanitize(xdb[i0:i1]))
 
     print "  add in %.3f s" % (time.time() - t0)
     print "storing", args.indexfile
@@ -186,6 +202,8 @@ if args.beta_centroids:
         beta_centroids = neighbor_codec.train_beta_codebook(
             rfn, xt_full, niter=args.beta_niter)
 
+        #beta_centroids = np.zeros((args.beta_nsq, rfn.k, rfn.dsub), dtype=np.float32)
+        #beta_centroids[-1, 0, -1] = 1
         print "  storing", args.beta_centroids
         np.save(args.beta_centroids, beta_centroids)
 
@@ -209,17 +227,23 @@ if args.beta_centroids:
 
         bs = 1000000 if args.add_bs == -1 else args.add_bs
 
-        for i0 in range(0, nb, bs):
-            i1 = min(i0 + bs, nb)
+        rfn.ntotal = nt
+        faiss.copy_array_to_vector(np.zeros(args.beta_nsq * nt, dtype='uint8'), rfn.codes)
+        for i0 in range(0, nq, bs):
+            i1 = min(i0 + bs, nq)
             print "   encode %d:%d / %d [%.3f s]\r" % (
-                i0, i1, nb, time.time() - t0),
+                i0, i1, nq, time.time() - t0),
             sys.stdout.flush()
-            xbatch = vec_transform(sanitize(xb[i0:i1]))
+            xbatch = vec_transform(sanitize(xq[i0:i1]))
             rfn.add_codes(i1 - i0, faiss.swig_ptr(xbatch))
         print
 
         print "storing %s" % args.neigh_recons_codes
         codes = faiss.vector_to_array(rfn.codes)
+        #codes = np.zeros((nb * args.beta_nsq), 'uint8');
+        #faiss.copy_array_to_vector(codes.ravel(),
+        #                           rfn.codes)
+        #rfn.ntotal = nb
         np.save(args.neigh_recons_codes, codes)
 
 ######################################################
@@ -232,7 +256,7 @@ if args.reconstruct:
 
     xq_recons = np.empty(
         xq_tr.shape, dtype='float32')
-    rfn.reconstruct_n(0, xq_tr.shape[0], faiss.swig_ptr(xq_recons))
+    rfn.reconstruct_n(xt.shape[0], xq_tr.shape[0], faiss.swig_ptr(xq_recons))
 
     np.linalg.norm(xq_recons - xq_tr, axis=1).tofile(args.residue_norms)
 

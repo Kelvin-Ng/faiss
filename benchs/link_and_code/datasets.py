@@ -19,7 +19,7 @@ import sys
 # set this to the directory that contains the datafiles.
 # deep1b data should be at simdir + 'deep1b'
 # bigann data should be at simdir + 'bigann'
-simdir = '/mnt/vol/gfsai-east/ai-group/datasets/simsearch/'
+simdir = '/data/kelvin/aq_research/data/'
 
 #################################################################
 # Small I/O functions
@@ -34,6 +34,12 @@ def ivecs_read(fname):
 
 def fvecs_read(fname):
     return ivecs_read(fname).view('float32')
+
+
+def bvecs_read(fname):
+    a = np.fromfile(fname, dtype='uint8')
+    d = a[:4].view('int32')[0]
+    return a.reshape(-1, d + 4)[:, 4:].copy()
 
 
 def ivecs_mmap(fname):
@@ -158,6 +164,14 @@ def load_data(dataset='deep1M', compute_gt=False):
         xb = fvecs_read(basedir + "sift_base.fvecs")
         xq = fvecs_read(basedir + "sift_query.fvecs")
         gt = ivecs_read(basedir + "sift_groundtruth.ivecs")
+
+    elif dataset == 'sift1b_11m':
+        basedir = simdir + 'sift1b_11m/'
+
+        xt = bvecs_read(basedir + "sift1b_11m_learn.bvecs")
+        xb = bvecs_read(basedir + "sift1b_11m_base.bvecs")
+        xq = bvecs_read(basedir + "sift1b_11m_query.bvecs")
+        gt = None
 
     elif dataset.startswith('bigann'):
         basedir = simdir + 'bigann/'
