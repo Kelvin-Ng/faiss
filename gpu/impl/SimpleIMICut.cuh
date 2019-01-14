@@ -18,7 +18,8 @@ void runSimpleIMICut(// (imiId, qid, rank) -> index
                      const Tensor<float, 3, true>& imiDistances,
                      // (imiId, qid) -> upper_bound
                      Tensor<int, 2, true>& imiUpperBounds,
-                     int size,
+                     int squareLen,
+                     int totalLen,
                      cudaStream_t stream);
 
 #ifdef FAISS_USE_FLOAT16
@@ -26,7 +27,8 @@ void runSimpleIMICut(// (imiId, qid, rank) -> index
                      const Tensor<half, 3, true>& imiDistances,
                      // (imiId, qid) -> upper_bound
                      Tensor<int, 2, true>& imiUpperBounds,
-                     int size,
+                     int squareLen,
+                     int totalLen,
                      cudaStream_t stream);
 #endif
 
