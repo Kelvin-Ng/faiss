@@ -1,37 +1,268 @@
-#include "SimpleIMICut.cuh"
-#include "SimpleIMISelect.cuh"
+/**
+ * Copyright (c) 2015-present, Facebook, Inc.
+ * All rights reserved.
+ *
+ * This source code is licensed under the BSD+Patents license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
 
+
+#include "SimpleIMICut.cuh"
+#include "../../FaissAssert.h"
+#include "../utils/ConversionOperators.cuh"
+#include "../utils/DeviceDefs.cuh"
+#include "../utils/DeviceUtils.h"
+#include "../utils/Float16.cuh"
+#include "../utils/MathOperators.cuh"
+#include "../utils/PtxUtils.cuh"
+#include "../utils/StaticUtils.h"
+#include "../utils/Reductions.cuh"
+#include "math.h"
 
 namespace faiss { namespace gpu {
 
+// Input: (batch x dim), # repeats
+// Output: (# repeats, norm of batch vector)
+// Done under the presumption that the dimension size is not too large
+// (<10k or so), since there wouldn't be enough parallelism applying a
+// single block to the problem. Also that each vector is large enough
+// (>64), since a single block works on multiple rows' norms at the
+// same time.
+// T: the type we are doing the math in (e.g., float, half)
+// TVec: the potentially vectorized type we are loading in (e.g.,
+// float4, half2)
+template <typename T, typename TVec, typename int64_t,
+          int RowTileSize, bool NormLoop>
+__global__ void SimpleIMICut(Tensor<TVec, 3, true, int64_t> input,
+                                Tensor<int, 2, true, int64_t> output
+                                int squareLen,
+                                int totalLen) {
+  extern __shared__ char smemByte1[]; // #warps * RowTileSize elements
+  extern __shared__ char smemByte2[];
+  T* smemMin = (T*) smemByte1;
+  T* smemId  = (T*) smemByte2;
+  int64_t numWarps = utils::divUp(blockDim.x, kWarpSize);
+  int64_t laneId = getLaneId();
+  int64_t warpId = threadIdx.x / kWarpSize;
 
-void runSimpleIMIcut(const Tensor<float, 3, true>& imiDistances,
-                     Tensor<int, 2, true>& imiUpperBounds,
+  bool lastRowTile = (blockIdx.x == (gridDim.x - 1));
+  int64_t rowStart = RowTileSize * blockIdx.x;
+  T rowMin[RowTileSize];
+  int rowId[RowTileSize];
+
+  if (lastRowTile) {
+    // We are handling the very end of the input matrix rows
+    for (int64_t row = 0; row < input.getSize(1) - rowStart; ++row) {
+      if (NormLoop) {
+        rowMin[0] = 1e10;
+
+        for (int64_t col = threadIdx.x;
+             col < totalLen - 2 * squareLen ; col += blockDim.x) {
+          TVec val = abs(input[0][rowStart + row][col + squareLen] - input[1][rowStart + row][col + squareLen]);
+          //rowNorm[0] = Math<T>::add(rowNorm[0], Math<TVec>::reduceAdd(val));
+          rowId[0] = ( val < rowMin[0] ? col + squareLen : rowId[0]);
+          rowMin[0] = ( val < rowMin[0] ? val : rowMin[0]);
+        }
+      } else {
+        TVec val = abs(input[0][rowStart + row][threadIdx.x + squareLen] - input[1][rowStart + row][threadIdx.x + squareLen]);
+        //val = Math<TVec>::mul(val, val);
+        //rowNorm[0] = Math<TVec>::reduceAdd(val);
+        rowId[0] = ( val < rowMin[0] ? col + squareLen : rowId[0]);
+        rowMin[0] = ( val < rowMin[0] ? val : rowMin[0]);
+      }
+
+      //rowNorm[0] = warpReduceAllMin(rowNorm[0]);
+      pair<T,int> res = warpReduceAllMin(rowMin[0],rowId[0]);
+      rowMin[0] = res.first;
+      rowId[0] = res.second;
+      if (laneId == 0) {
+        smemMin[row * numWarps + warpId] = rowMin[0];
+		smemId[row * numWarps + warpId] = rowId[0];
+      }
+    }
+  } else {
+    // We are guaranteed that all RowTileSize rows are available in
+    // [rowStart, rowStart + RowTileSize)
+
+    if (NormLoop) {
+      // A single block of threads is not big enough to span each
+      // vector
+      TVec tmp[RowTileSize];
+
+#pragma unroll
+      for (int row = 0; row < RowTileSize; ++row) {
+        rowMin[row] = 1e10;
+      }
+
+      for (int64_t col = threadIdx.x;
+        col < totalLen - 2 * squareLen; col += blockDim.x) {
+
+#pragma unroll
+      for (int row = 0; row < RowTileSize; ++row) {
+        tmp[row] = abs(input[0][rowStart + row][col + squareLen]-input[1][rowStart+row][col + squareLen]);
+        }
+
+#pragma unroll
+      for (int row = 0; row < RowTileSize; ++row) {
+        rowId[row] = (tmp[row] < rowMin[row] ? col + squareLen : rowId[row]);
+        rowMin[row] = (tmp[row] < rowMin[row] ? tmp[row] : rowMin[row]);
+        }
+      }
+    } else {
+      TVec tmp[RowTileSize];
+
+      // A block of threads is the exact size of the vector
+#pragma unroll
+      for (int row = 0; row < RowTileSize; ++row) {
+        tmp[row] = abs(input[0][rowStart + row][threadIdx.x + squareLen] - input[1][rowStart + row][threadIdx.x + squareLen]);
+      }
+
+#pragma unroll
+      for (int row = 0; row < RowTileSize; ++row) {
+        rowId[row] = (tmp[row] < rowMin[row] ? threadIdx.x + squareLen : rowId[row]);
+        rowMin[row] = (tmp[row] < rowMin[row] ? tmp[row] : rowMin[row]);
+      }
+    }
+
+    // Sum up all parts in each warp
+#pragma unroll
+    for (int row = 0; row < RowTileSize; ++row) {
+     // rowNorm[row] = warpReduceAllSum(rowNorm[row]);
+	 pair<T, int> res = warpReduceAllMin(rowMin[row], rowId[row]);
+	 rowMin[row] = res.first;
+	 rowId[row] = res.second;
+    }
+
+    if (laneId == 0) {
+#pragma unroll
+    for (int row = 0; row < RowTileSize; ++row) {
+      smemMin[row * numWarps + warpId] = rowMin[row];
+      smemId[row * numWarps + warpId] = rowId[row];
+      }
+    }
+  }
+
+  __syncthreads();
+
+  // Sum across warps
+  if (warpId == 0) {
+#pragma unroll
+    for (int row = 0; row < RowTileSize; ++row) {
+      rowMin[row] = laneId < numWarps ? smemMin[row * numWarps + laneId] : 1e10;
+      rowId[row] = laneId < numWarps ? smemId[row * numWarps + laneId] : Math<T>::zero();
+    }
+
+#pragma unroll
+    for (int row = 0; row < RowTileSize; ++row) {
+      pair<T, int> res = warpReduceAllMin(rowMin[row], rowId[row]);
+      rowMin[row] = res.first;
+      rowId[row] = res.second;
+    }
+
+    // Write out answer
+    if (laneId == 0) {
+#pragma unroll
+    for (int row = 0; row < RowTileSize; ++row) {
+      int outCol = rowStart + row;
+      if (lastRowTile) {
+         if(outCol < output.getSize(1)) {
+           output[0][outcol] = rowId[row];
+	   output[1][outcol] = totalLen - rowId[row];
+        }
+      }
+	 else {
+	 output[0][outcol] = rowId[row];
+	 output[1][outcol] = totalLen - rowId[row];
+	}
+      }
+    }
+  }
+}
+
+template <typename T, typename TVec, typename int64_t>
+void runSimpleIMICut(Tensor<T, 3, true, int64_t>& input,
+                       Tensor<int, 2, true, int64_t>& output,
+                       int squareLen,
+                       int totalLen,
+                       cudaStream_t stream) {
+  FAISS_ASSERT(input.getSize(0) == output.getSize(0));
+
+  int64_t maxThreads = (int64_t) getMaxThreadsCurrentDevice();
+  constexpr int rowTileSize = 8;
+
+#define RUN_L2(TYPE_T, TYPE_TVEC, INPUT)                                            \
+  do {                                                                              \
+    if (normLoop) {                                                                 \
+      SimpleIMICut<TYPE_T, TYPE_TVEC, int64_t, rowTileSize, true>                   \
+        <<<grid, block, smem, stream>>>(INPUT, output, squareLen, totalLen);        \
+    } else {                                                                        \
+        SimpleIMICut<TYPE_T, TYPE_TVEC, int64_t, rowTileSize, false>                \
+          <<<grid, block, smem, stream>>>(INPUT, output, squareLen, totalLen);      \
+	  }                                                                         \
+  } while (0)                                                                       \
+
+  if (input.template canCastResize<TVec>()) {
+    // Can load using the vectorized type
+    auto inputV = input.template castResize<TVec>();
+
+    auto dim = totalLen - 2 * squareLen;//inputV.getSize(1);
+    bool normLoop = dim > maxThreads;
+    auto numThreads = min(dim, maxThreads);
+
+    auto grid = dim3(utils::divUp(inputV.getSize(0), rowTileSize));
+    auto block = dim3(numThreads);
+
+    auto smem = sizeof(T) * rowTileSize * utils::divUp(numThreads, kWarpSize);
+
+    RUN_L2(T, TVec, inputV);
+  } else {
+    // Can't load using the vectorized type
+
+    auto dim = totalLen - 2 * squareLen;//input.getSize(1);
+    bool normLoop = dim > maxThreads;
+    auto numThreads = min(dim, maxThreads);
+
+    auto grid = dim3(utils::divUp(input.getSize(0), rowTileSize));
+    auto block = dim3(numThreads);
+
+    auto smem = sizeof(T) * rowTileSize * utils::divUp(numThreads, kWarpSize);
+
+    RUN_L2(T, T, input);
+  }
+
+#undef RUN_L2
+
+  CUDA_TEST_ERROR();
+}
+
+void runSimpleIMICut(Tensor<float, 3, true>& input,
+                     Tensor<int, 2, true>& output,
                      int squareLen;
                      int totalLen;
                      cudaStream_t stream) {
-
-     runSimpleIMISelect(imiDistances,
-                        imiUpperBounds,
-                        squareLen,
-                        totalLen,
-                        cudaStream_t stream);
+  if (input.canUseIndexType<int>()) {
+    runSimpleIMICut<float, int, int>(input, output, squareLen, totalLen, stream);
+  } else {
+    auto inputCast = input.castIndexType<long>();
+    auto outputCast = output.castIndexType<long>();
+    runSimpleIMICut<float, int, long>(inputCast, outputCast, squareLen, totalLen, stream);
+  }
 }
 
 #ifdef FAISS_USE_FLOAT16
-void runSimpleIMIcut(const Tensor<half, 3, true>& imiDistances,
-                     Tensor<int, 2, true>& imiUpperBounds,
+void runSimpleIMICut(Tensor<half, 3, true>& input,
+                     Tensor<int, 2, true>& output,
                      int squareLen;
                      int totalLen;
                      cudaStream_t stream) {
-
-     runSimpleIMISelect(imiDistances,
-                        imiUpperBuounds,
-                        squareLen,
-                        totalLen,
-                        cudaStream_t stream);
+  if (input.canUseIndexType<int>()) {
+    runSimpleIMICut<half, int, int>(input, output, squareLen, totalLen, stream);
+  } else {
+    auto inputCast = input.castIndexType<long>();
+    auto outputCast = output.castIndexType<long>();
+    runSimpleIMICut<half, int, long>(inputCast, outputCast, squareLen, totalLen, stream);
+  }
 }
-
 #endif
 
-} } //namespace
+} } // namespace
