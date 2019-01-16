@@ -59,6 +59,14 @@ struct Math {
   static inline __device__ T zero() {
     return (T) 0;
   }
+  static inline __device__ T abs(T v) {
+    return v < 0 ? -v : v;
+  }
+  static inline __device__ int argMin(T v) {
+      return 0;
+  }
+  static inline __device__ T getVal(T v,int id) {
+      return v; 
 };
 
 template <>
@@ -215,6 +223,29 @@ struct Math<float4> {
     v.w = 0.0f;
     return v;
   }
+
+  static inline __device__ float4 abs(float4 v) {
+    v.x = (v.x < 0 ? -v.x : v.x);
+    v.y = (v.y < 0 ? -v.y : v.y);
+    v.z = (v.z < 0 ? -v.z : v.z);
+    v.w = (v.w < 0 ? -v.w : v.w);
+    return v;
+  }
+  static inline __device__ int argMin(float4 v) {
+    int id = 0;
+    float Min = v.x;
+    if(v.y < Min) {Min = v.y; id = 1;}
+    if(v.z < Min) {Min = v.z; id = 2;}
+    if(v.w < Min) {Min = v.w; id = 3;}
+    return id;
+  }
+  static inline __device__ float getVal(float4 v,int id) {
+      if(id == 0) return v.x;
+      if(id == 1) return v.y;
+      if(id == 2) return v.z;
+      if(id == 3) return v.w;
+  }
+
 };
 
 #ifdef FAISS_USE_FLOAT16
