@@ -209,4 +209,166 @@ runPass2SelectLists(Tensor<float, 2, true>& heapDistances,
 #undef RUN_PASS
 }
 
+template <int ThreadsPerBlock,
+          int NumWarpQ,
+          int NumThreadQ,
+          bool Dir,
+          typename ListIdT>
+__global__ void
+pass2SelectIMILists(Tensor<float, 2, true> heapDistances,
+                    Tensor<int, 2, true> heapIndices,
+                    Tensor<int, 2, true> prefixSumOffsets,
+                    Tensor<ListIdT, 2, true> topQueryToCentroid,
+                    int k,
+                    int imiSize,
+                    Tensor<float, 2, true> outDistances,
+                    // (field, qid, rank) -> val
+                    // field 0: imiId0
+                    // field 1: imiId1
+                    // field 2: fineId
+                    Tensor<int, 3, true> outIndices) {
+  constexpr int kNumWarps = ThreadsPerBlock / kWarpSize;
+
+  __shared__ float smemK[kNumWarps * NumWarpQ];
+  __shared__ int smemV[kNumWarps * NumWarpQ];
+
+  constexpr auto kInit = Dir ? kFloatMin : kFloatMax;
+  BlockSelect<float, int, Dir, Comparator<float>,
+            NumWarpQ, NumThreadQ, ThreadsPerBlock>
+    heap(kInit, -1, smemK, smemV, k);
+
+  auto queryId = blockIdx.x;
+  int num = heapDistances.getSize(1);
+  int limit = utils::roundDown(num, kWarpSize);
+
+  int i = threadIdx.x;
+  auto heapDistanceStart = heapDistances[queryId];
+
+  // BlockSelect add cannot be used in a warp divergent circumstance; we
+  // handle the remainder warp below
+  for (; i < limit; i += blockDim.x) {
+    heap.add(heapDistanceStart[i], i);
+  }
+
+  // Handle warp divergence separately
+  if (i < num) {
+    heap.addThreadQ(heapDistanceStart[i], i);
+  }
+
+  // Merge all final results
+  heap.reduce();
+
+  for (int i = threadIdx.x; i < k; i += blockDim.x) {
+    // `v` is the index in `heapIndices`
+    // We need to translate this into an original user index. The
+    // reason why we don't maintain intermediate results in terms of
+    // user indices is to substantially reduce temporary memory
+    // requirements and global memory write traffic for the list
+    // scanning.
+    // This code is highly divergent, but it's probably ok, since this
+    // is the very last step and it is happening a small number of
+    // times (#queries x k).
+    int v = smemV[i];
+    int imiId0 = -1;
+    int imiId1 = -1;
+    int fineId = -1;
+
+    if (v != -1) {
+      // `offset` is the offset of the intermediate result, as
+      // calculated by the original scan.
+      int offset = heapIndices[queryId][v];
+
+      // In order to determine the actual user index, we need to first
+      // determine what list it was in.
+      // We do this by binary search in the prefix sum list.
+      int probe = binarySearchForBucket(prefixSumOffsets[queryId].data(),
+                                        prefixSumOffsets.getSize(1),
+                                        offset);
+
+      // This is then the probe for the query; we can find the actual
+      // list ID from this
+      ListIdT listId = topQueryToCentroid[queryId][probe];
+
+      // Now, we need to know the offset within the list
+      // We ensure that before the array (at offset -1), there is a 0 value
+      int listStart = *(prefixSumOffsets[queryId][probe].data() - 1);
+      fineId = offset - listStart;
+
+      imiId0 = listId / imiSize;
+      imiId1 = listId % imiSize;
+    }
+
+    outIndices[0][queryId][i] = imiId0;
+    outIndices[1][queryId][i] = imiId1;
+    outIndices[2][queryId][i] = fineId;
+  }
+}
+
+void
+runPass2SelectIMILists(Tensor<float, 2, true>& heapDistances,
+                       Tensor<int, 2, true>& heapIndices,
+                       Tensor<int, 2, true>& prefixSumOffsets,
+                       Tensor<int, 2, true>& topQueryToCentroid,
+                       int k,
+                       int imiSize,
+                       bool chooseLargest,
+                       // (field, qid, rank) -> val
+                       // field 0: imiId0
+                       // field 1: imiId1
+                       // field 2: fineId
+                       Tensor<int, 3, true> outIndices,
+                       cudaStream_t stream) {
+  constexpr auto kThreadsPerBlock = 128;
+
+  auto grid = dim3(topQueryToCentroid.getSize(0));
+  auto block = dim3(kThreadsPerBlock);
+
+#define RUN_PASS(NUM_WARP_Q, NUM_THREAD_Q, DIR)                         \
+  do {                                                                  \
+    pass2SelectLists<kThreadsPerBlock,                                  \
+                     NUM_WARP_Q, NUM_THREAD_Q, DIR>                     \
+      <<<grid, block, 0, stream>>>(heapDistances,                       \
+                                   heapIndices,                         \
+                                   listIndices.data().get(),            \
+                                   prefixSumOffsets,                    \
+                                   topQueryToCentroid,                  \
+                                   k,                                   \
+                                   imiSize,                             \
+                                   outIndices);                         \
+    CUDA_TEST_ERROR();                                                  \
+    return; /* success */                                               \
+  } while (0)
+
+#define RUN_PASS_DIR(DIR)                                \
+  do {                                                   \
+    if (k == 1) {                                        \
+      RUN_PASS(1, 1, DIR);                               \
+    } else if (k <= 32) {                                \
+      RUN_PASS(32, 2, DIR);                              \
+    } else if (k <= 64) {                                \
+      RUN_PASS(64, 3, DIR);                              \
+    } else if (k <= 128) {                               \
+      RUN_PASS(128, 3, DIR);                             \
+    } else if (k <= 256) {                               \
+      RUN_PASS(256, 4, DIR);                             \
+    } else if (k <= 512) {                               \
+      RUN_PASS(512, 8, DIR);                             \
+    } else if (k <= 1024) {                              \
+      RUN_PASS(1024, 8, DIR);                            \
+    }                                                    \
+  } while (0)
+
+  if (chooseLargest) {
+    RUN_PASS_DIR(true);
+  } else {
+    RUN_PASS_DIR(false);
+  }
+
+  // unimplemented / too many resources
+  FAISS_ASSERT_FMT(false, "unimplemented k value (%d)", k);
+
+#undef RUN_PASS_DIR
+#undef RUN_PASS
+}
+
 } } // namespace

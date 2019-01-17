@@ -1,0 +1,73 @@
+/**
+ * Copyright (c) 2019-present, Husky Data Lab.
+ * All rights reserved.
+ *
+ * This source code is licensed under the BSD+Patents license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
+
+#include "HQ.cuh"
+#include "L2DistanceWithVectorHQ.cuh"
+
+namespace faiss { namespace gpu {
+
+// Note: this function assumes that all vectors contain only the corresponding subspace
+__global__ void computeHQDistanceTableOneIMI(const Tensor<float, 2, true> deviceQueries,
+                                             // (qid, coarseRank) -> coarseIdx
+                                             const Tensor<int, 2, true> deviceIMIIndices,
+                                             // qid -> upper_bound
+                                             Tensor<int, 1, true> deviceIMIUpperBounds,
+                                             // (coarseIdx, fineIdx, dim) -> val
+                                             Tensor<float, 3, true> fineCentroids,
+                                             // (qid, coarseRank, fineIdx) -> val
+                                             Tensor<float, 3, true> outDistances) {
+    int qid = blockIdx.x;
+    int upper_bound = deviceIMIUpperBounds[qid];
+    runL2DistanceWithVectorHQ(fineCentroids,
+                              deviceIMIIndices.narrowOutermost(qid, 1).view<1>().narrowOutermost(0, upper_bound),
+                              deviceQueries.narrowOutermost(qid, 1).view<1>(),
+                              outDistances.narrowOutermost(qid, 1).view<2>(),
+                              true,
+                              0);
+}
+
+void runComputeHQDistanceTable(const Tensor<float, 2, true>& deviceQueries,
+                               // (imiId, qid, coarseRank) -> coarseIdx
+                               const Tensor<int, 3, true>& deviceIMIIndices,
+                               // (imiId, qid) -> upper_bound
+                               const Tensor<int, 2, true>& deviceIMIUpperBounds,
+                               // (imiId, coarseIdx, fineIdx, dim) -> val
+                               const Tensor<float, 4, true>& fineCentroids,
+                               // (imiId, qid, coarseRank, fineIdx) -> val
+                               Tensor<float, 4, true> outDistances) {
+    auto stream = resources_->getDefaultStreamCurrentDevice();
+    auto streams = resources_->getAlternateStreamsCurrentDevice();
+
+    for (int imiId = 0; imiId < 2; ++imiId) {
+        computeHQDistanceTableOneIMI<<<deviceQueries.getSize(0), 1, 0, streams[imiId]>>>(
+                deviceQueries.narrow(1, imiId * deviceQueries.getSize(1) / 2, deviceQueries.getSize(1) / 2), // get the data of the corresponding subspace
+                deviceIMIIndices.narrowOutermost(imiId, 1).view<2>(),
+                deviceIMIUpperBounds.narrowOutermost(imiId, 1).view<1>(),
+                fineCentroids.narrowOutermost(imiId, 1).view<3>()
+                outDistances.narrowOutermost(imiId, 1).view<3>());
+    }
+
+    streamWait(streams, {stream});
+}
+
+void HQ::query(const Tensor<float, 2, true>& deviceQueries, int imiNprobeSquareLen, int imiNprobeSideLen, int k, Tensor<float, 2, true>& deviceOutDistances, Tensor<int, 2, true>& outIndices) {
+    auto stream = resources_->getDefaultStreamCurrentDevice();
+    auto& mem = resources_->getMemoryManagerCurrentDevice();
+
+    DeviceTensor<int, 3, true> deviceIMIOutIndices(mem, {2, queries.getSize(0), deviceCentroids_.getSize(1)}, stream);
+    DeviceTensor<int, 2, true> deviceIMIOutUpperBounds(mem, {2, queries.getSize(0)}, stream);
+    simpleIMI_->query(deviceQueries, imiNprobeSquareLen, imiNprobeSideLen, deviceIMIOutIndices, deviceIMIOutUpperBounds);
+
+    int imiNprobe = imiNprobeSideLen * imiNprobeSquareLen - imiNprobeSquareLen * imiNprobeSquareLen;
+
+    DeviceTensor<float, 4, true> deviceDistanceTable(mem, {2, queries.getSize(0), imiNprobeSideLen, fineCentroids.getSize(2)}, stream); // the third dimension is an over-estimation of the actual size
+    runComputeHQDistanceTable(deviceQueries, deviceIMIOutIndices, deviceIMIOutUpperBounds, fineCentroids_, deviceDistanceTable);
+}
+
+} } // namespace
