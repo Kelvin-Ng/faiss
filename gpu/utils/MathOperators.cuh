@@ -60,13 +60,17 @@ struct Math {
     return (T) 0;
   }
   static inline __device__ T abs(T v) {
-    return v < 0 ? -v : v;
+    return abs(v);
   }
   static inline __device__ int argMin(T ) {
     return 0;
   }
   static inline __device__ T getVal(T v,int) {
     return v;
+  }
+  static inline __device__ T RevSub(T a,T b) {
+    return a - b;
+  }
 };
 
 template <>
@@ -241,6 +245,14 @@ struct Math<float4> {
   }
   static inline __device__ float getVal(float4 v,int id) {
     return ((float*)&v)[id];
+  }
+  static inline __device__ float4 RevSub(float4 a,float4 b) {
+    float4 v;
+    v.x = a.x - b.w;
+    v.y = a.y - b.z;
+    v.z = a.z - b.y;
+    v.w = a.w - b.x;
+    return v;
   }
 
 };
