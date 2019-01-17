@@ -18,6 +18,7 @@
 #include "../utils/StaticUtils.h"
 #include "../utils/Reductions.cuh"
 #include "math.h"
+#include <thrust/tuple.h>
 
 namespace faiss { namespace gpu {
 
@@ -32,7 +33,7 @@ namespace faiss { namespace gpu {
 // TVec: the potentially vectorized type we are loading in (e.g.,
 // float4, half2)
 template <typename T, typename TVec, typename int64_t,
-          int RowTileSize, bool NormLoop, bool uvec>
+          int RowTileSize, bool NormLoop>
 __global__ void SimpleIMICut(Tensor<TVec, 3, true, int64_t> input,
                                 Tensor<int, 2, true, int64_t> output
                                 int squareLen,
@@ -51,9 +52,10 @@ __global__ void SimpleIMICut(Tensor<TVec, 3, true, int64_t> input,
   int rowId[RowTileSize];
   T argMin;
   int argId;
-  int totalCol = (uvec ? (totalLen - 2 * squareLen + 1) /4 : totalLen - 2 * squareLen);
-  int stp = (uvec ? 4 : 1);
-  squareLen = (uvec ? squareLen : squareLen / 4);
+
+  constexpr int stp = sizeof(TVec) / sizeof(T);
+  int totalCol = (stp == 4 ? (totalLen - 2 * squareLen + 1) /4 : totalLen - 2 * squareLen);
+  squareLen = (stp == 4 ? squareLen : squareLen / 4);
   if (lastRowTile) {
     // We are handling the very end of the input matrix rows
     for (int64_t row = 0; row < input.getSize(1) - rowStart; ++row) {
@@ -62,24 +64,24 @@ __global__ void SimpleIMICut(Tensor<TVec, 3, true, int64_t> input,
 
         for (int64_t col = threadIdx.x;
              col < totalCol ; col += blockDim.x) {
-          TVec val = Math<Tvec>::abs(Math<Tvec>::sub(input[0][rowStart + row][col + squareLen] - input[1][rowStart + row][col + squareLen]));
-          argId = Math<Tvec>::argMin(val);
-          argMin = Math<Tvec>::getVal(val,argId);
+          TVec val = Math<TVec>::abs(Math<TVec>::sub(input[0][rowStart + row][col + squareLen],  input[1][rowStart + row][col + squareLen]));
+          argId = Math<TVec>::argMin(val);
+          argMin = Math<TVec>::getVal(val,argId);
           rowId[0] = ( argMin < rowMin[0] ? (col + squareLen) * stp +argId : rowId[0]);
-          rowMin[0] = ( argMin < rowMin[0] ? argMin : rowMin[0]);
+          rowMin[0] = min(argMin,rowMin[0]);//rowMin[0] = ( argMin < rowMin[0] ? argMin : rowMin[0]);
         }
       } else {
-        TVec val = Math<Tvec>::abs(Math<Tvec>::sub(input[0][rowStart + row][threadIdx.x + squareLen] - input[1][rowStart + row][threadIdx.x + squareLen]));
-          argId = Math<Tvec>::argMin(val);
-          argMin = Math<Tvec>::getVal(val,argId);
+        TVec val = Math<TVec>::abs(Math<TVec>::sub(input[0][rowStart + row][threadIdx.x + squareLen], input[1][rowStart + row][threadIdx.x + squareLen]));
+          argId = Math<TVec>::argMin(val);
+          argMin = Math<TVec>::getVal(val,argId);
           rowId[0] = ( argMin < rowMin[0] ? (threadIdx.x + squareLen) * stp + argId : rowId[0]);
-          rowMin[0] = ( argMin < rowMin[0] ? argMin : rowMin[0]);
+          rowMin[0] = min(argMin,rowMin[0]);//rowMin[0] = ( argMin < rowMin[0] ? argMin : rowMin[0]);
       }
 
       thrust::tie(rowMin[0], rowId[0]) = warpReduceAllMin(rowMin[0], rowId[0]);
       if (laneId == 0) {
         smemMin[row * numWarps + warpId] = rowMin[0];
-		smemId[row * numWarps + warpId] = rowId[0];
+        smemId[row * numWarps + warpId] = rowId[0];
       }
     }
   } else {
@@ -101,15 +103,15 @@ __global__ void SimpleIMICut(Tensor<TVec, 3, true, int64_t> input,
 
 #pragma unroll
       for (int row = 0; row < RowTileSize; ++row) {
-        tmp[row] = Math<Tvec>::abs(Math<Tvec>::sub(input[0][rowStart + row][col + squareLen] - input[1][rowStart + row][col + squareLen]));
+        tmp[row] = Math<TVec>::abs(Math<TVec>::sub(input[0][rowStart + row][col + squareLen], input[1][rowStart + row][col + squareLen]));
         }
 
 #pragma unroll
       for (int row = 0; row < RowTileSize; ++row) {
-          argId = Math<Tvec>::argMin(val);
-          argMin = Math<Tvec>::getVal(val,argId);
+          argId = Math<TVec>::argMin(val);
+          argMin = Math<TVec>::getVal(val,argId);
           rowId[row] = ( argMin < rowMin[row] ? (col + squareLen) * stp +argId : rowId[row]);
-          rowMin[row] = ( argMin < rowMin[row] ? argMin : rowMin[row]);
+          rowMin[row] = min(argMin, rowMin[row]);//rowMin[row] = ( argMin < rowMin[row] ? argMin : rowMin[row]);
         }
       }
     } else {
@@ -118,15 +120,15 @@ __global__ void SimpleIMICut(Tensor<TVec, 3, true, int64_t> input,
       // A block of threads is the exact size of the vector
 #pragma unroll
       for (int row = 0; row < RowTileSize; ++row) {
-        tmp[row] = Math<Tvec>::abs(Math<Tvec>::sub(input[0][rowStart + row][threadIdx.x + squareLen] - input[1][rowStart + row][threadIdx.x + squareLen]));
+        tmp[row] = Math<TVec>::abs(Math<TVec>::sub(input[0][rowStart + row][threadIdx.x + squareLen], input[1][rowStart + row][threadIdx.x + squareLen]));
       }
 
 #pragma unroll
       for (int row = 0; row < RowTileSize; ++row) {
-          argId = Math<Tvec>::argMin(val);
-          argMin = Math<Tvec>::getVal(val,argId);
+          argId = Math<TVec>::argMin(val);
+          argMin = Math<TVec>::getVal(val,argId);
           rowId[row] = ( argMin < rowMin[row] ? (threadIdx.x + squareLen) * stp + argId : rowId[row]);
-          rowMin[row] = ( argMin < rowMin[row] ? argMin : rowMin[row]);
+          rowMin[row] = min(argMin, rowMin[row]);//rowMin[row] = ( argMin < rowMin[row] ? argMin : rowMin[row]);
       }
     }
 
@@ -168,12 +170,12 @@ __global__ void SimpleIMICut(Tensor<TVec, 3, true, int64_t> input,
       if (lastRowTile) {
          if(outCol < output.getSize(1)) {
            output[0][outcol] = rowId[row];
-	   output[1][outcol] = totalLen - rowId[row];
+           output[1][outcol] = totalLen - rowId[row];
         }
       }
 	 else {
-	 output[0][outcol] = rowId[row];
-	 output[1][outcol] = totalLen - rowId[row];
+	   output[0][outcol] = rowId[row];
+	   output[1][outcol] = totalLen - rowId[row];
 	}
       }
     }
@@ -194,23 +196,11 @@ void runSimpleIMICut(Tensor<T, 3, true, int64_t>& input,
 #define RUN_L2(TYPE_T, TYPE_TVEC, INPUT)                                            \
   do {                                                                              \
     if (normLoop) {                                                                 \
-        if(uvec) {                                                                  \
-          SimpleIMICut<TYPE_T, TYPE_TVEC, int64_t, rowTileSize, true, true>         \
-            <<<grid, block, smem, stream>>>(INPUT, output, squareLen, totalLen);    \
-        }                                                                           \
-        else {                                                                      \
-          SimpleIMICut<TYPE_T, TYPE_TVEC, int64_t, rowTileSize, true, false>        \
-            <<<grid, block, smem, stream>>>(INPUT, output, squareLen, totalLen);    \
-        }                                                                           \
+      SimpleIMICut<TYPE_T, TYPE_TVEC, int64_t, rowTileSize, true>                   \
+         <<<grid, block, smem, stream>>>(INPUT, output, squareLen, totalLen);       \
     } else {                                                                        \
-        if(uvec) {                                                                  \
-           SimpleIMICut<TYPE_T, TYPE_TVEC, int64_t, rowTileSize, false, true>       \
-             <<<grid, block, smem, stream>>>(INPUT, output, squareLen, totalLen);   \
-           }                                                                        \
-        else {                                                                      \
-          SimpleIMICut<TYPE_T, TYPE_TVEC, int64_t, rowTileSize, false, false>       \
-            <<<grid, block, smem, stream>>>(INPUT, output, squareLen, totalLen);    \
-        }                                                                           \
+        SimpleIMICut<TYPE_T, TYPE_TVEC, int64_t, rowTileSize, false>                \
+          <<<grid, block, smem, stream>>>(INPUT, output, squareLen, totalLen);      \
     }                                                                               \
   }while (0)                                                                        
 
@@ -220,7 +210,6 @@ void runSimpleIMICut(Tensor<T, 3, true, int64_t>& input,
 
     auto dim = (totalLen - 2 * squareLen + 1) / 4;//inputV.getSize(1);
     bool normLoop = dim > maxThreads;
-    bool uvec = true;
     auto numThreads = min(dim, maxThreads);
 
     auto grid = dim3(utils::divUp(inputV.getSize(1), rowTileSize));
@@ -234,7 +223,6 @@ void runSimpleIMICut(Tensor<T, 3, true, int64_t>& input,
 
     auto dim = totalLen - 2 * squareLen;//input.getSize(1);
     bool normLoop = dim > maxThreads;
-    bool uvec = 1;
     auto numThreads = min(dim, maxThreads);
 
     auto grid = dim3(utils::divUp(input.getSize(1), rowTileSize));
@@ -244,7 +232,6 @@ void runSimpleIMICut(Tensor<T, 3, true, int64_t>& input,
 
     RUN_L2(T, T, input);
   }
-
 #undef RUN_L2
 
   CUDA_TEST_ERROR();
