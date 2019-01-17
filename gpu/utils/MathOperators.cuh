@@ -68,7 +68,7 @@ struct Math {
   static inline __device__ T getVal(T v,int) {
     return v;
   }
-  static inline __device__ T RevSub(T a,T b) {
+  static inline __device__ T revSub(T a,T b) {
     return a - b;
   }
 };
@@ -246,7 +246,7 @@ struct Math<float4> {
   static inline __device__ float getVal(float4 v,int id) {
     return ((float*)&v)[id];
   }
-  static inline __device__ float4 RevSub(float4 a,float4 b) {
+  static inline __device__ float4 revSub(float4 a,float4 b) {
     float4 v;
     v.x = a.x - b.w;
     v.y = a.y - b.z;
