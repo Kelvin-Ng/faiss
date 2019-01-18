@@ -308,7 +308,7 @@ void
 runPass2SelectIMILists(Tensor<float, 2, true>& heapDistances,
                        Tensor<int, 2, true>& heapIndices,
                        Tensor<int, 2, true>& prefixSumOffsets,
-                       Tensor<int, 2, true>& topQueryToCentroid,
+                       Tensor<ListIdT, 2, true>& topQueryToCentroid,
                        int k,
                        int imiSize,
                        bool chooseLargest,
