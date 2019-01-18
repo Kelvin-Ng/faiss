@@ -221,7 +221,6 @@ pass2SelectIMILists(Tensor<float, 2, true> heapDistances,
                     Tensor<ListIdT, 2, true> topQueryToCentroid,
                     int k,
                     int imiSize,
-                    Tensor<float, 2, true> outDistances,
                     // (field, qid, rank) -> val
                     // field 0: imiId0
                     // field 1: imiId1
