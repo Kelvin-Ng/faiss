@@ -1,10 +1,11 @@
 /**
- * Copyright (c) 2015-present, Facebook, Inc.
+ * Copyright (c) 2019-present, Husky Data Lab.
  * All rights reserved.
- * 
+ *
  * This source code is licensed under the BSD+Patents license found in the
  * LICENSE file in the root directory of this source tree.
  */
+
 
 
 #include "SimpleIMICut.cuh"
@@ -34,7 +35,7 @@ namespace faiss { namespace gpu {
 // float4, half2)
 template <typename T, typename TVec, typename int64_t,
           int RowTileSize, bool NormLoop>
-__global__ void SimpleIMICut(Tensor<TVec, 3, true, int64_t> input,
+__global__ void simpleIMICut(Tensor<TVec, 3, true, int64_t> input,
                              Tensor<int, 2, true, int64_t> output
                              int squareLen,
                              int totalLen) {
@@ -195,10 +196,10 @@ void runSimpleIMICut(Tensor<T, 3, true, int64_t>& input,
 #define RUN_L2(TYPE_T, TYPE_TVEC, INPUT)                                            \
   do {                                                                              \
     if (normLoop) {                                                                 \
-      SimpleIMICut<TYPE_T, TYPE_TVEC, int64_t, rowTileSize, true>                   \
+      simpleIMICut<TYPE_T, TYPE_TVEC, int64_t, rowTileSize, true>                   \
          <<<grid, block, smem, stream>>>(INPUT, output, squareLen, totalLen);       \
     } else {                                                                        \
-      SimpleIMICut<TYPE_T, TYPE_TVEC, int64_t, rowTileSize, false>                  \
+      simpleIMICut<TYPE_T, TYPE_TVEC, int64_t, rowTileSize, false>                  \
         <<<grid, block, smem, stream>>>(INPUT, output, squareLen, totalLen);        \
     }                                                                               \
   }while (0)                                                                        
