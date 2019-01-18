@@ -325,11 +325,10 @@ runPass2SelectIMILists(Tensor<float, 2, true>& heapDistances,
 
 #define RUN_PASS(NUM_WARP_Q, NUM_THREAD_Q, DIR)                         \
   do {                                                                  \
-    pass2SelectLists<kThreadsPerBlock,                                  \
-                     NUM_WARP_Q, NUM_THREAD_Q, DIR>                     \
+    pass2SelectIMILists<kThreadsPerBlock,                               \
+                        NUM_WARP_Q, NUM_THREAD_Q, DIR>                  \
       <<<grid, block, 0, stream>>>(heapDistances,                       \
                                    heapIndices,                         \
-                                   listIndices.data().get(),            \
                                    prefixSumOffsets,                    \
                                    topQueryToCentroid,                  \
                                    k,                                   \
