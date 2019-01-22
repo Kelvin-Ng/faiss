@@ -52,7 +52,7 @@ void runPass2SelectLists(Tensor<float, 2, true>& heapDistances,
 void runPass2SelectIMILists(Tensor<float, 2, true>& heapDistances,
                             Tensor<int, 2, true>& heapIndices,
                             Tensor<int, 2, true>& prefixSumOffsets,
-                            Tensor<int, 2, true>& topQueryToCentroid,
+                            Tensor<unsigned long long, 2, true>& topQueryToCentroid, // TODO: make ListIdT configurable
                             int k,
                             int imiSize,
                             bool chooseLargest,
