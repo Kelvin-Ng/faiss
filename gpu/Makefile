@@ -43,6 +43,12 @@ CUOBJ =     impl/BinaryDistance.o \
             impl/PQScanMultiPassNoPrecomputed.o \
             impl/PQScanMultiPassPrecomputed.o \
             impl/VectorResidual.o \
+            impl/HQ.o \
+            impl/HQSecondStage.o \
+            impl/HQThirdStage.o \
+            impl/HQThirdStageL2Distances.o \
+            impl/L2DistanceWithVectorHQ.o \
+            impl/SimpleIMI.o \
             GpuDistance.o \
             GpuIndex.o \
             GpuIndexBinaryFlat.o \

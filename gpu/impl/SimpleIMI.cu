@@ -24,28 +24,26 @@ void SimpleIMI::query(const Tensor<float, 2, true>& deviceQueries,
     auto stream = resources_->getDefaultStreamCurrentDevice();
     auto& mem = resources_->getMemoryManagerCurrentDevice();
 
-    DeviceTensor<float, 3, true> deviceOutDistances(mem, {2, queries.getSize(0), deviceCentroids_.getSize(1)}, stream);
+    DeviceTensor<float, 3, true> deviceOutDistances(mem, {2, deviceQueries.getSize(0), deviceCentroids_.getSize(1)}, stream);
 
     // TODO: the two runDistance calls can run concurrently (i.e. in different streams)
     // TODO: Do not do k-selection
     for (int imiId = 0; imiId < 2; ++imiId) {
         Tensor<float, 2, true> deviceCentroidsView = deviceCentroids_.narrowOutermost(imiId, 1).view<2>();
-        Tensor<float, 2, true> queriesView = queries.narrow(1, imiId * queries.getSize(1) / 2, queries.getSize(1) / 2); // handle when query dim is not even
+        Tensor<float, 2, true> deviceQueriesView = deviceQueries.narrow(1, imiId * deviceQueries.getSize(1) / 2, deviceQueries.getSize(1) / 2); // handle when query dim is not even
         Tensor<float, 2, true> deviceOutDistancesView = deviceOutDistances.narrowOutermost(imiId, 1).view<2>();
         Tensor<int, 2, true> deviceOutIndicesView = deviceOutIndices.narrowOutermost(imiId, 1).view<2>();
 
         // TODO: check if it is really sorted
-        runDistance(l2Distance_,
-                    resources_,
-                    deviceCentroidsView,
-                    nullptr,
-                    nullptr, // compute norms in temp memory. TODO: can store it because it does not consume much memory
-                    queriesView,
-                    deviceCentroids_.getSize(1),
-                    deviceOutDistancesView,
-                    deviceOutIndicesView,
-                    false,
-                    false);
+        // TODO: support inner product
+        runL2Distance(resources_,
+                      deviceCentroidsView,
+                      nullptr,
+                      nullptr, // compute norms in temp memory. TODO: can store it because it does not consume much memory
+                      deviceQueriesView,
+                      deviceCentroids_.getSize(1),
+                      deviceOutDistancesView,
+                      deviceOutIndicesView);
     }
 
     runSimpleIMICut(deviceOutDistances, deviceOutUpperBounds, nprobeSquareLen, nprobeSideLen, stream);

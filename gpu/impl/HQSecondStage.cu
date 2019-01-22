@@ -17,16 +17,38 @@
 #include "../utils/Float16.cuh"
 #include "../utils/LoadStoreOperators.cuh"
 #include "../utils/StaticUtils.h"
+#include "../utils/ThrustAllocator.cuh"
+#include "IVFUtils.cuh"
 #include "LoadCodeDistances.cuh"
 
 #include <thrust/iterator/counting_iterator.h>
+#include <thrust/transform_scan.h>
 
 namespace faiss { namespace gpu {
 
+/*template <typename ListIdT = unsigned long long>
+__global__ void HQCalcListIds(const Tensor<int, 3, true> imiIndices, const Tensor<int, 2, true> imiUpperBounds, int nprobeSquareLen, int imiSize, Tensor<ListIdT, 2, true> listIds) {
+    int qid = blockIdx.x;
+    int overallRank = threadIdx.x;
+
+    int imiUpperBoundCol = imiUpperBounds[1][qid];
+
+    int upperBlockSize = imiUpperBoundCol * nprobeSquareLen;
+
+    int coarseRank0, coarseRank1;
+    if (overallRank > upperBlockSize) {
+        coarseRank0 = nprobeSquareLen + (overallRank - upperBlockSize) / nprobeSquareLen;
+        coarseRank1 = (overallRank - upperBlockSize) % nprobeSquareLen;
+    } else {
+        coarseRank0 = overallRank / imiUpperBoundCol;
+        coarseRank1 = overallRank % imiUpperBoundCol;
+    }
+
+    listIds[qid][overallRank] = (ListIdT)imiIndices[0][qid][coarseRank0] * imiSize + (ListIdT)imiIndices[1][qid][coarseRank1];
+}*/
+
 template <typename ListIdT = unsigned long long>
 void runHQCalcListIds(const Tensor<int, 3, true>& deviceIMIIndices, const Tensor<int, 2, true>& deviceIMIUpperBounds, int numQueries, int numListsPerQuery, int nprobeSquareLen, int imiSize, Tensor<ListIdT, 2, true>& deviceListIds, cudaStream_t stream) {
-    constexpr int kThrustMemSize = 16384; // TODO: set a reasonable size
-
     thrust::counting_iterator<int> first(0);
     thrust::counting_iterator<int> last = first + numQueries * numListsPerQuery;
 
@@ -44,14 +66,16 @@ void runHQCalcListIds(const Tensor<int, 3, true>& deviceIMIIndices, const Tensor
             coarseRank0 = nprobeSquareLen + (overallRank - upperBlockSize) / nprobeSquareLen;
             coarseRank1 = (overallRank - upperBlockSize) % nprobeSquareLen;
         } else {
-            coarseRank0 = overallRank / imiUpperBoundsCol;
-            coarseRank1 = overallRank % imiUpperBoundsCol;
+            coarseRank0 = overallRank / imiUpperBoundCol;
+            coarseRank1 = overallRank % imiUpperBoundCol;
         }
 
         return (ListIdT)deviceIMIIndices[0][qid][coarseRank0] * imiSize + (ListIdT)deviceIMIIndices[1][qid][coarseRank1];
-    }
+    };
 
-    thrust::transform(thrust::cuda::par().on(stream), first, last, deviceListIds.data(), pos2ListId);
+    thrust::transform(thrust::cuda::par.on(stream), first, last, deviceListIds.data(), pos2ListId);
+
+    //HQCalcListIds<<<numQueries, numListsPerQuery, 0, stream>>>(deviceIMIIndices, deviceIMIUpperBounds, nprobeSquareLen, imiSize, deviceListIds);
 }
 
 template <typename ListIdT = unsigned long long>
@@ -69,7 +93,7 @@ void runHQCalcListOffsets(const int* deviceListLengths, const Tensor<ListIdT, 2,
     // TODO: should I make a class instead of a lambda? I can control how to store the captured variables if I use a class.
     auto listId2ListLength = [=] __device__ (ListIdT listId) {
         return deviceListLengths[listId];
-    }
+    };
 
     thrust::transform_inclusive_scan(thrust::cuda::par(thrustAlloc).on(stream), deviceListIds.data(), deviceListIds.end(), devicePrefixSumOffsets, listId2ListLength, thrust::plus<int>());
 }
@@ -121,9 +145,9 @@ HQSecondStageDistances(// (qid, overallRank) -> listId
   int outBase = *(prefixSumOffsets[qid][overallRank].data() - 1);
   float* distanceOut = distances[outBase].data();
 
-  ListIdT listId = listIds[overallRank];
+  ListIdT listId = listIds[qid][overallRank];
   // Safety guard in case NaNs in input cause no list ID to be generated
-  if (listId == -1) {
+  if (listId == (ListIdT)-1) {
     return;
   }
 
@@ -187,9 +211,9 @@ HQSecondStageDistances(// (qid, overallRank) -> listId
   }
 }
 
-template <typename LookupT>
+template <typename ListIdT, typename LookupT>
 void runHQSecondStageDistances(// (qid, overallRank) -> listId
-                               const Tensor<int, 2, true>& deviceListIds,
+                               const Tensor<ListIdT, 2, true>& deviceListIds,
                                // (imiId, qid) -> upper_bound
                                const Tensor<int, 2, true>& deviceIMIUpperBounds,
                                // (imiId, qid, coarseRank, fineIdx) -> val
@@ -214,7 +238,7 @@ void runHQSecondStageDistances(// (qid, overallRank) -> listId
 
   // pq centroid distances
   auto smem = sizeof(LookupT);
-  smem *= distanceTable.getSize(3) * distanceTable.getSize(0);
+  smem *= deviceDistanceTable.getSize(3) * deviceDistanceTable.getSize(0);
   FAISS_ASSERT(smem <= getMaxSharedMemPerBlockCurrentDevice());
 
 #define RUN_PQ_OPT(LOOKUP_VEC_T)                            \
@@ -256,6 +280,7 @@ void runHQSecondStageDistances(// (qid, overallRank) -> listId
 
 void runHQSecondStage(const Tensor<int, 3, true>& deviceIMIIndices,
                       const Tensor<int, 2, true>& deviceIMIUpperBounds,
+                      const Tensor<float, 4, true>& deviceDistanceTable,
                       const void** deviceListCodes,
                       const int* deviceListLengths,
                       int numQueries,
@@ -295,7 +320,8 @@ void runHQSecondStage(const Tensor<int, 3, true>& deviceIMIIndices,
                          stream);
 
     constexpr int maxListLen = 128; // FIXME: set a correct value
-    DeviceTensor<float, 2, true> deviceDistances(mem, {numQueries, maxListLen * numListsPerQuery});
+    DeviceTensor<float, 2, true> deviceDistances(mem, {numQueries, maxListLen * numListsPerQuery}, stream);
+    Tensor<float, 1, true> deviceDistancesFlat = deviceDistances.downcastInner<1>();
 
     runHQSecondStageDistances(deviceListIds,
                               deviceIMIUpperBounds,
@@ -306,7 +332,7 @@ void runHQSecondStage(const Tensor<int, 3, true>& deviceIMIIndices,
                               numQueries,
                               nprobeSquareLen,
                               imiSize,
-                              deviceDistances,
+                              deviceDistancesFlat,
                               stream);
 
     constexpr int kNProbeSplit = 8;
@@ -315,7 +341,6 @@ void runHQSecondStage(const Tensor<int, 3, true>& deviceIMIIndices,
     DeviceTensor<float, 3, true> deviceHeapDistances(mem, {numQueries, pass2Chunks, k}, stream);
     DeviceTensor<int, 3, true> deviceHeapIndices(mem, {numQueries, pass2Chunks, k}, stream);
 
-    Tensor<float, 1, true> deviceDistancesFlat = deviceDistances.downcastInner<1>();
     runPass1SelectLists(devicePrefixSumOffsets,
                         deviceDistancesFlat,
                         numListsPerQuery,

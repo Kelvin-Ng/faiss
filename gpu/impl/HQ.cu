@@ -9,19 +9,21 @@
 
 #include "HQ.cuh"
 #include "L2DistanceWithVectorHQ.cuh"
+#include "HQSecondStage.cuh"
+#include "HQThirdStage.cuh"
 
 namespace faiss { namespace gpu {
 
 // Note: this function assumes that all vectors contain only the corresponding subspace
-__global__ void computeHQDistanceTableOneIMI(const Tensor<float, 2, true> deviceQueries,
-                                             // (qid, coarseRank) -> coarseIdx
-                                             const Tensor<int, 2, true> deviceIMIIndices,
-                                             // qid -> upper_bound
-                                             Tensor<int, 1, true> deviceIMIUpperBounds,
-                                             // (coarseIdx, fineIdx, dim) -> val
-                                             Tensor<float, 3, true> fineCentroids,
-                                             // (qid, coarseRank, fineIdx) -> val
-                                             Tensor<float, 3, true> outDistances) {
+__global__ void computeHQL2DistanceTableOneIMI(const Tensor<float, 2, true> deviceQueries,
+                                               // (qid, coarseRank) -> coarseIdx
+                                               const Tensor<int, 2, true> deviceIMIIndices,
+                                               // qid -> upper_bound
+                                               Tensor<int, 1, true> deviceIMIUpperBounds,
+                                               // (coarseIdx, fineIdx, dim) -> val
+                                               Tensor<float, 3, true> fineCentroids,
+                                               // (qid, coarseRank, fineIdx) -> val
+                                               Tensor<float, 3, true> outDistances) {
     int qid = blockIdx.x;
     int upper_bound = deviceIMIUpperBounds[qid];
     runL2DistanceWithVectorHQ(fineCentroids,
@@ -32,42 +34,74 @@ __global__ void computeHQDistanceTableOneIMI(const Tensor<float, 2, true> device
                               0);
 }
 
-void runComputeHQDistanceTable(const Tensor<float, 2, true>& deviceQueries,
-                               // (imiId, qid, coarseRank) -> coarseIdx
-                               const Tensor<int, 3, true>& deviceIMIIndices,
-                               // (imiId, qid) -> upper_bound
-                               const Tensor<int, 2, true>& deviceIMIUpperBounds,
-                               // (imiId, coarseIdx, fineIdx, dim) -> val
-                               const Tensor<float, 4, true>& fineCentroids,
-                               // (imiId, qid, coarseRank, fineIdx) -> val
-                               Tensor<float, 4, true> outDistances) {
-    auto stream = resources_->getDefaultStreamCurrentDevice();
-    auto streams = resources_->getAlternateStreamsCurrentDevice();
+void runComputeHQL2DistanceTable(const Tensor<float, 2, true>& deviceQueries,
+                                 // (imiId, qid, coarseRank) -> coarseIdx
+                                 const Tensor<int, 3, true>& deviceIMIIndices,
+                                 // (imiId, qid) -> upper_bound
+                                 const Tensor<int, 2, true>& deviceIMIUpperBounds,
+                                 // (imiId, coarseIdx, fineIdx, dim) -> val
+                                 const Tensor<float, 4, true>& deviceFineCentroids,
+                                 // (imiId, qid, coarseRank, fineIdx) -> val
+                                 Tensor<float, 4, true>& outDistances,
+                                 GpuResources* resources) {
+    auto stream = resources->getDefaultStreamCurrentDevice();
+    auto streams = resources->getAlternateStreamsCurrentDevice();
 
     for (int imiId = 0; imiId < 2; ++imiId) {
-        computeHQDistanceTableOneIMI<<<deviceQueries.getSize(0), 1, 0, streams[imiId]>>>(
+        computeHQL2DistanceTableOneIMI<<<deviceQueries.getSize(0), 1, 0, streams[imiId]>>>(
                 deviceQueries.narrow(1, imiId * deviceQueries.getSize(1) / 2, deviceQueries.getSize(1) / 2), // get the data of the corresponding subspace
                 deviceIMIIndices.narrowOutermost(imiId, 1).view<2>(),
                 deviceIMIUpperBounds.narrowOutermost(imiId, 1).view<1>(),
-                fineCentroids.narrowOutermost(imiId, 1).view<3>()
+                deviceFineCentroids.narrowOutermost(imiId, 1).view<3>(),
                 outDistances.narrowOutermost(imiId, 1).view<3>());
     }
 
     streamWait(streams, {stream});
 }
 
-void HQ::query(const Tensor<float, 2, true>& deviceQueries, int imiNprobeSquareLen, int imiNprobeSideLen, int k, Tensor<float, 2, true>& deviceOutDistances, Tensor<int, 2, true>& outIndices) {
+void HQ::query(const Tensor<float, 2, true>& deviceQueries, int imiNprobeSquareLen, int imiNprobeSideLen, int secondStageNProbe, int k, Tensor<float, 2, true>& deviceOutDistances, Tensor<int, 3, true>& deviceOutIndices) {
     auto stream = resources_->getDefaultStreamCurrentDevice();
     auto& mem = resources_->getMemoryManagerCurrentDevice();
 
-    DeviceTensor<int, 3, true> deviceIMIOutIndices(mem, {2, queries.getSize(0), deviceCentroids_.getSize(1)}, stream);
-    DeviceTensor<int, 2, true> deviceIMIOutUpperBounds(mem, {2, queries.getSize(0)}, stream);
+    DeviceTensor<int, 3, true> deviceIMIOutIndices(mem, {2, deviceQueries.getSize(0), deviceFineCentroids_.getSize(1)}, stream);
+    DeviceTensor<int, 2, true> deviceIMIOutUpperBounds(mem, {2, deviceQueries.getSize(0)}, stream);
     simpleIMI_->query(deviceQueries, imiNprobeSquareLen, imiNprobeSideLen, deviceIMIOutIndices, deviceIMIOutUpperBounds);
 
     int imiNprobe = imiNprobeSideLen * imiNprobeSquareLen - imiNprobeSquareLen * imiNprobeSquareLen;
 
-    DeviceTensor<float, 4, true> deviceDistanceTable(mem, {2, queries.getSize(0), imiNprobeSideLen, fineCentroids.getSize(2)}, stream); // the third dimension is an over-estimation of the actual size
-    runComputeHQDistanceTable(deviceQueries, deviceIMIOutIndices, deviceIMIOutUpperBounds, fineCentroids_, deviceDistanceTable);
+    DeviceTensor<float, 4, true> deviceDistanceTable(mem, {2, deviceQueries.getSize(0), imiNprobeSideLen, deviceFineCentroids_.getSize(2)}, stream); // the third dimension is an over-estimation of the actual size
+    // TODO: handle inner product
+    runComputeHQL2DistanceTable(deviceQueries, deviceIMIOutIndices, deviceIMIOutUpperBounds, deviceFineCentroids_, deviceDistanceTable, resources_);
+
+    DeviceTensor<int, 3, true> deviceSecondStageIndices(mem, {3, deviceQueries.getSize(0), secondStageNProbe}, stream);
+    runHQSecondStage(deviceIMIOutIndices,
+                     deviceIMIOutUpperBounds,
+                     deviceDistanceTable,
+                     deviceListCodes1_,
+                     deviceListLengths_,
+                     secondStageNProbe,
+                     imiNprobe,
+                     imiNprobeSquareLen,
+                     deviceFineCentroids_.getSize(1),
+                     !l2Distance_,
+                     deviceSecondStageIndices,
+                     resources_,
+                     stream);
+
+    runHQThirdStage(deviceQueries,
+                    deviceSecondStageIndices,
+                    deviceListCodes1_,
+                    deviceListCodes2_,
+                    deviceCodewords1_,
+                    deviceCodewords2_,
+                    deviceFineCentroids_.getSize(1),
+                    numCodes2_,
+                    k,
+                    l2Distance_,
+                    deviceOutDistances,
+                    deviceOutIndices,
+                    resources_,
+                    stream);
 }
 
 } } // namespace

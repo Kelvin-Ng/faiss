@@ -257,18 +257,18 @@ void runL2DistanceWithVectorHQ(const Tensor<float, 3, true>& input, // (coarseId
                                Tensor<float, 2, true> output, // (coarseRank, fineIdx) -> val
                                bool normSquared,
                                cudaStream_t stream) {
-#ifndef __CUDA_ARCH__ // we can call canUseIndexType only on CPU
+#ifdef __CUDA_ARCH__ // we can call canUseIndexType only on CPU
+  runL2DistanceWithVectorHQ<float, float4>(input, inputIndices, vec, output, normSquared, stream);
+#else
   if (input.canUseIndexType<int>()) {
     runL2DistanceWithVectorHQ<float, float4, int>(input, inputIndices, vec, output, normSquared, stream);
   } else {
     auto inputCast = input.castIndexType<long>();
-    auto inputIndicesCast = inputIndices.castIndexType<long>();
+    auto inputIndicesCast = inputIndices.template castIndexType<long>();
     auto vecCast = vec.castIndexType<long>();
     auto outputCast = output.castIndexType<long>();
     runL2DistanceWithVectorHQ<float, float4, long>(inputCast, inputIndicesCast, vecCast, outputCast, normSquared, stream);
   }
-#else
-  runL2DistanceWithVectorHQ<float, float4>(input, inputIndices, vec, output, normSquared, stream);
 #endif
 }
 
@@ -281,18 +281,18 @@ void runL2DistanceWithVectorHQ(const Tensor<half, 3, true>& input, // (coarseIdx
                                Tensor<half, 2, true> output, // (coarseRank, fineIdx) -> val
                                bool normSquared,
                                cudaStream_t stream) {
-#ifndef __CUDA_ARCH__
+#ifdef __CUDA_ARCH__
+  runL2DistanceWithVectorHQ<half, half2>(input, inputIndices, vec, output, normSquared, stream);
+#else
   if (input.canUseIndexType<int>()) {
     runL2DistanceWithVectorHQ<half, half2, int>(input, inputIndices, vec, output, normSquared, stream);
   } else {
     auto inputCast = input.castIndexType<long>();
-    auto inputIndicesCast = inputIndices.castIndexType<long>();
+    auto inputIndicesCast = inputIndices.template castIndexType<long>();
     auto vecCast = vec.castIndexType<long>();
     auto outputCast = output.castIndexType<long>();
     runL2DistanceWithVectorHQ<half, half2, long>(inputCast, inputIndicesCast, vecCast, outputCast, normSquared, stream);
   }
-#else
-  runL2DistanceWithVectorHQ<half, half2>(input, inputIndices, vec, output, normSquared, stream);
 #endif
 }
 #endif

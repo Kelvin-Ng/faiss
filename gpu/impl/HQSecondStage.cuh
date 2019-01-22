@@ -10,11 +10,13 @@
 #pragma once
 
 #include "../utils/Tensor.cuh"
+#include "../GpuResources.h"
 
 namespace faiss { namespace gpu {
 
 void runHQSecondStage(const Tensor<int, 3, true>& deviceIMIIndices,
                       const Tensor<int, 2, true>& deviceIMIUpperBounds,
+                      const Tensor<float, 4, true>& deviceDistanceTable,
                       const void** deviceListCodes,
                       const int* deviceListLengths,
                       int k,
