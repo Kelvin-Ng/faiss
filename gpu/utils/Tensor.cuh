@@ -297,46 +297,46 @@ class Tensor {
   /// padding on the leading dimensions.
   template <int NewDim>
   __host__ __device__
-  Tensor<T, NewDim, InnerContig, IndexT, PtrTraits> downcastOuter();
+  Tensor<T, NewDim, InnerContig, IndexT, PtrTraits> downcastOuter() const;
 
   /// Downcast a tensor of dimension `D` to some tensor of dimension
   /// D' < D by collapsing the leading dimensions. asserts if there is
   /// padding on the leading dimensions.
   template <int NewDim>
   __host__ __device__
-  Tensor<T, NewDim, InnerContig, IndexT, PtrTraits> downcastInner();
+  Tensor<T, NewDim, InnerContig, IndexT, PtrTraits> downcastInner() const;
 
   /// Returns a tensor that is a view of the `SubDim`-dimensional slice
   /// of this tensor, starting at `at`.
   template <int SubDim>
   __host__ __device__ Tensor<T, SubDim, InnerContig, IndexT, PtrTraits>
-  view(DataPtrType at);
+  view(DataPtrType at) const;
 
   /// Returns a tensor that is a view of the `SubDim`-dimensional slice
   /// of this tensor, starting where our data begins
   template <int SubDim>
   __host__ __device__ Tensor<T, SubDim, InnerContig, IndexT, PtrTraits>
-  view();
+  view() const;
 
   /// Returns a tensor of the same dimension that is a view of the
   /// original tensor with the specified dimension restricted to the
   /// elements in the range [start, start + size)
   __host__ __device__ Tensor<T, Dim, InnerContig, IndexT, PtrTraits>
-  narrowOutermost(IndexT start, IndexT size);
+  narrowOutermost(IndexT start, IndexT size) const;
 
   /// Returns a tensor of the same dimension that is a view of the
   /// original tensor with the specified dimension restricted to the
   /// elements in the range [start, start + size).
   /// Can occur in an arbitrary dimension
   __host__ __device__ Tensor<T, Dim, InnerContig, IndexT, PtrTraits>
-  narrow(int dim, IndexT start, IndexT size);
+  narrow(int dim, IndexT start, IndexT size) const;
 
   /// Returns a view of the given tensor expressed as a tensor of a
   /// different number of dimensions.
   /// Only works if we are contiguous.
   template <int NewDim>
   __host__ __device__ Tensor<T, NewDim, InnerContig, IndexT, PtrTraits>
-  view(std::initializer_list<IndexT> sizes);
+  view(std::initializer_list<IndexT> sizes) const;
 
   protected:
   /// Raw pointer to where the tensor data begins

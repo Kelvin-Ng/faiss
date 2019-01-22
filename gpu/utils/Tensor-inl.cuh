@@ -542,7 +542,7 @@ template <typename T, int Dim, bool InnerContig,
           typename IndexT, template <typename U> class PtrTraits>
 template <int NewDim>
 __host__ __device__ Tensor<T, NewDim, InnerContig, IndexT, PtrTraits>
-Tensor<T, Dim, InnerContig, IndexT, PtrTraits>::downcastOuter() {
+Tensor<T, Dim, InnerContig, IndexT, PtrTraits>::downcastOuter() const {
   // Can only create tensors of lesser dimension
   static_assert(NewDim < Dim, "Can only downcast to lesser dim");
 
@@ -587,7 +587,7 @@ template <typename T, int Dim, bool InnerContig,
           typename IndexT, template <typename U> class PtrTraits>
 template <int NewDim>
 __host__ __device__ Tensor<T, NewDim, InnerContig, IndexT, PtrTraits>
-Tensor<T, Dim, InnerContig, IndexT, PtrTraits>::downcastInner() {
+Tensor<T, Dim, InnerContig, IndexT, PtrTraits>::downcastInner() const {
   // Can only create tensors of lesser dimension
   static_assert(NewDim < Dim, "Can only downcast to lesser dim");
 
@@ -630,7 +630,7 @@ template <typename T, int Dim, bool InnerContig,
           typename IndexT, template <typename U> class PtrTraits>
 template <int SubDim>
 __host__ __device__ Tensor<T, SubDim, InnerContig, IndexT, PtrTraits>
-Tensor<T, Dim, InnerContig, IndexT, PtrTraits>::view(DataPtrType at) {
+Tensor<T, Dim, InnerContig, IndexT, PtrTraits>::view(DataPtrType at) const {
   static_assert(SubDim >= 1 && SubDim < Dim,
                 "can only create view of lesser dim");
 
@@ -650,7 +650,7 @@ template <typename T, int Dim, bool InnerContig,
           typename IndexT, template <typename U> class PtrTraits>
 template <int SubDim>
 __host__ __device__ Tensor<T, SubDim, InnerContig, IndexT, PtrTraits>
-Tensor<T, Dim, InnerContig, IndexT, PtrTraits>::view() {
+Tensor<T, Dim, InnerContig, IndexT, PtrTraits>::view() const {
   return view<SubDim>(data_);
 }
 
@@ -658,7 +658,7 @@ template <typename T, int Dim, bool InnerContig,
           typename IndexT, template <typename U> class PtrTraits>
 __host__ __device__ Tensor<T, Dim, InnerContig, IndexT, PtrTraits>
 Tensor<T, Dim, InnerContig, IndexT, PtrTraits>::narrowOutermost(IndexT start,
-                                                                IndexT size) {
+                                                                IndexT size) const {
   return this->narrow(0, start, size);
 }
 
@@ -667,7 +667,7 @@ template <typename T, int Dim, bool InnerContig,
 __host__ __device__ Tensor<T, Dim, InnerContig, IndexT, PtrTraits>
 Tensor<T, Dim, InnerContig, IndexT, PtrTraits>::narrow(int dim,
                                                        IndexT start,
-                                                       IndexT size) {
+                                                       IndexT size) const {
   DataPtrType newData = data_;
 
   GPU_FAISS_ASSERT(start >= 0 &&
@@ -697,7 +697,7 @@ template <typename T, int Dim, bool InnerContig,
 template <int NewDim>
 __host__ __device__ Tensor<T, NewDim, InnerContig, IndexT, PtrTraits>
 Tensor<T, Dim, InnerContig, IndexT, PtrTraits>::view(
-  std::initializer_list<IndexT> sizes) {
+  std::initializer_list<IndexT> sizes) const {
   GPU_FAISS_ASSERT(this->isContiguous());
 
   GPU_FAISS_ASSERT(sizes.size() == NewDim);
