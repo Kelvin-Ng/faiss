@@ -59,6 +59,35 @@ void runComputeHQL2DistanceTable(const Tensor<float, 2, true>& deviceQueries,
     streamWait(streams, {stream});
 }
 
+HQ::HQ(GpuResources* resources,
+       DeviceTensor<float, 4, true> deviceFineCentroids,
+       DeviceTensor<float, 4, true> deviceCodewords1,
+       DeviceTensor<float, 4, true> deviceCodewords2,
+       thrust::device_vector<unsigned char> deviceListCodes1Data,
+       thrust::device_vector<unsigned char> deviceListCodes2Data,
+       SimpleIMI* simpleIMI,
+       int numCodes2,
+       bool l2Distance) : resources_(resources),
+                          deviceFineCentroids_(std::move(deviceFineCentroids)),
+                          deviceCodewords1_(std::move(deviceCodewords1)),
+                          deviceCodewords2_(std::move(deviceCodewords2)),
+                          deviceListCodes1Data_(std::move(deviceListCodes1Data)),
+                          deviceListCodes2Data_(std::move(deviceListCodes2Data)),
+                          deviceListLengths_(std::move(deviceListLengths)),
+                          deviceListCodes1_(deviceListLengths_.size()),
+                          deviceListCodes2_(deviceListLengths_.size()),
+                          simpleIMI_(simpleIMI),
+                          numCodes2_(numCodes2),
+                          l2Distance_(l2Distance) {
+    auto stream = resources_->getDefaultStreamCurrentDevice();
+    auto streams = resources->getAlternateStreamsCurrentDevice();
+
+    thrust::transform_exclusive_scan(thrust::cuda::par.on(streams[0]), deviceListLengths_.begin(), deviceListLengths_.end(), deviceListCodes1_.begin(), [](int len) { return (unsigned long long)len * 4 }, deviceListCodes1Data_.data().get(), thrust::plus<unsigned long long>());
+    thrust::transform_exclusive_scan(thrust::cuda::par.on(streams[1]), deviceListLengths_.begin(), deviceListLengths_.end(), deviceListCodes2_.begin(), [](int len) { return (unsigned long long)len * 4 }, deviceListCodes2Data_.data().get(), thrust::plus<unsigned long long>());
+
+    streamWait(streams, {stream});
+}
+
 void HQ::query(const Tensor<float, 2, true>& deviceQueries, int imiNprobeSquareLen, int imiNprobeSideLen, int secondStageNProbe, int k, Tensor<float, 2, true>& deviceOutDistances, Tensor<int, 3, true>& deviceOutIndices) {
     auto stream = resources_->getDefaultStreamCurrentDevice();
     auto& mem = resources_->getMemoryManagerCurrentDevice();
@@ -92,6 +121,7 @@ void HQ::query(const Tensor<float, 2, true>& deviceQueries, int imiNprobeSquareL
                     deviceSecondStageIndices,
                     deviceListCodes1_,
                     deviceListCodes2_,
+                    deviceCodewordsIMI_,
                     deviceCodewords1_,
                     deviceCodewords2_,
                     deviceFineCentroids_.getSize(1),

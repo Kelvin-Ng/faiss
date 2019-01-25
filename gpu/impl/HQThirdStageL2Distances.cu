@@ -25,6 +25,7 @@ __device__ __forceinline__ T
 HQThirdStageL2DistancesOneCol(const Tensor<TVec, 2, true>& queries,
                               const void** listCodes1,
                               const void** listCodes2,
+                              const Tensor<TVec, 3, true>& codewordsIMI,
                               const Tensor<TVec, 4, true>& codewords1,
                               const Tensor<TVec, 4, true>& codewords2,
                               int imiId[2],
@@ -49,8 +50,8 @@ HQThirdStageL2DistancesOneCol(const Tensor<TVec, 2, true>& queries,
 
   TVec my_codewords[2 + numCodes2];
 
-  my_codewords[0] = codewords1[isSecondHalf][0                      ][imiId[isSecondHalf]][col - isSecondHalf * halfDim];
-  my_codewords[1] = codewords1[isSecondHalf][1 + imiId[isSecondHalf]][code1              ][col - isSecondHalf * halfDim];
+  my_codewords[0] = codewordsIMI[isSecondHalf][imiId[isSecondHalf]][col - isSecondHalf * halfDim];
+  my_codewords[1] = codewords1  [isSecondHalf][imiId[isSecondHalf]][code1                       ][col - isSecondHalf * halfDim];
 #pragma unroll
   for (int i = 0; i < numCodes2 / 2; ++i) {
     my_codewords[2 + i * 2 + 0] = codewords2[i][0                    ][codes2[i * 2 + 0]][col];
@@ -75,6 +76,7 @@ __global__ void HQThirdStageL2Distances(Tensor<TVec, 2, true> queries,
                                         Tensor<int, 3, true> indices,
                                         const void** listCodes1,
                                         const void** listCodes2,
+                                        Tensor<TVec, 3, true> codewordsIMI,
                                         Tensor<TVec, 4, true> codewords1,
                                         Tensor<TVec, 4, true> codewords2,
                                         int imiSize,
@@ -104,11 +106,11 @@ __global__ void HQThirdStageL2Distances(Tensor<TVec, 2, true> queries,
 
         for (int col = threadIdx.x;
              col < queries.getSize(1); col += blockDim.x) {
-          T val = HQThirdStageL2DistancesOneCol<numCodes2, T>(queries, listCodes1, listCodes2, codewords1, codewords2, imiId, fineId, listId, col);
+          T val = HQThirdStageL2DistancesOneCol<numCodes2, T>(queries, listCodes1, listCodes2, codewordsIMI, codewords1, codewords2, imiId, fineId, listId, col);
           rowNorm[0] += val;
         }
       } else {
-        T val = HQThirdStageL2DistancesOneCol<numCodes2, T>(queries, listCodes1, listCodes2, codewords1, codewords2, imiId, fineId, listId, threadIdx.x);
+        T val = HQThirdStageL2DistancesOneCol<numCodes2, T>(queries, listCodes1, listCodes2, codewordsIMI, codewords1, codewords2, imiId, fineId, listId, threadIdx.x);
         rowNorm[0] = val;
       }
 
@@ -135,7 +137,7 @@ __global__ void HQThirdStageL2Distances(Tensor<TVec, 2, true> queries,
 
         for (int col = threadIdx.x;
              col < queries.getSize(1); col += blockDim.x) {
-          T val = HQThirdStageL2DistancesOneCol<numCodes2, T>(queries, listCodes1, listCodes2, codewords1, codewords2, imiId, fineId, listId, col);
+          T val = HQThirdStageL2DistancesOneCol<numCodes2, T>(queries, listCodes1, listCodes2, codewordsIMI, codewords1, codewords2, imiId, fineId, listId, col);
           rowNorm[row] += val;
         }
       }
@@ -148,7 +150,7 @@ __global__ void HQThirdStageL2Distances(Tensor<TVec, 2, true> queries,
         int fineId = indices[2][qid][rowStart + row];
         int listId = imiId[0] * imiSize + imiId[1];
 
-        T val = HQThirdStageL2DistancesOneCol<numCodes2, T>(queries, listCodes1, listCodes2, codewords1, codewords2, imiId, fineId, listId, threadIdx.x);
+        T val = HQThirdStageL2DistancesOneCol<numCodes2, T>(queries, listCodes1, listCodes2, codewordsIMI, codewords1, codewords2, imiId, fineId, listId, threadIdx.x);
         rowNorm[row] = val;
       }
     }
@@ -210,6 +212,7 @@ void runHQThirdStageL2Distances(const Tensor<float, 2, true>& queries,
                                 const Tensor<int, 3, true>& indices,
                                 const void** listCodes1,
                                 const void** listCodes2,
+                                const Tensor<float, 3, true>& codewordsIMI,
                                 const Tensor<float, 4, true>& codewords1,
                                 const Tensor<float, 4, true>& codewords2,
                                 int imiSize,
@@ -220,23 +223,23 @@ void runHQThirdStageL2Distances(const Tensor<float, 2, true>& queries,
   int64_t maxThreads = (int64_t) getMaxThreadsCurrentDevice();
   constexpr int rowTileSize = 8;
 
-#define RUN_L2(TYPE_T, TYPE_TVEC, QUERIES, CODEWORDS1, CODEWORDS2, NUMCODES2)                                \
+#define RUN_L2(TYPE_T, TYPE_TVEC, QUERIES, CODEWORDSIMI, CODEWORDS1, CODEWORDS2, NUMCODES2)                                \
   do {                                                                  \
     if (normLoop) {                                                     \
       if (normSquared) {                                                \
         HQThirdStageL2Distances<TYPE_T, TYPE_TVEC, rowTileSize, true, true, NUMCODES2>      \
-          <<<grid, block, smem, stream>>>(QUERIES, indices, listCodes1, listCodes2, CODEWORDS1, CODEWORDS2, imiSize, distances);               \
+          <<<grid, block, smem, stream>>>(QUERIES, indices, listCodes1, listCodes2, CODEWORDSIMI, CODEWORDS1, CODEWORDS2, imiSize, distances);               \
       } else {                                                          \
         HQThirdStageL2Distances<TYPE_T, TYPE_TVEC, rowTileSize, true, false, NUMCODES2>     \
-          <<<grid, block, smem, stream>>>(QUERIES, indices, listCodes1, listCodes2, CODEWORDS1, CODEWORDS2, imiSize, distances);               \
+          <<<grid, block, smem, stream>>>(QUERIES, indices, listCodes1, listCodes2, CODEWORDSIMI, CODEWORDS1, CODEWORDS2, imiSize, distances);               \
       }                                                                 \
     } else {                                                            \
       if (normSquared) {                                                \
         HQThirdStageL2Distances<TYPE_T, TYPE_TVEC, rowTileSize, false, true, NUMCODES2>     \
-          <<<grid, block, smem, stream>>>(QUERIES, indices, listCodes1, listCodes2, CODEWORDS1, CODEWORDS2, imiSize, distances);               \
+          <<<grid, block, smem, stream>>>(QUERIES, indices, listCodes1, listCodes2, CODEWORDSIMI, CODEWORDS1, CODEWORDS2, imiSize, distances);               \
       } else {                                                          \
         HQThirdStageL2Distances<TYPE_T, TYPE_TVEC, rowTileSize, false, false, NUMCODES2>    \
-          <<<grid, block, smem, stream>>>(QUERIES, indices, listCodes1, listCodes2, CODEWORDS1, CODEWORDS2, imiSize, distances);               \
+          <<<grid, block, smem, stream>>>(QUERIES, indices, listCodes1, listCodes2, CODEWORDSIMI, CODEWORDS1, CODEWORDS2, imiSize, distances);               \
       }                                                                 \
     }                                                                   \
   } while (0)
@@ -244,6 +247,7 @@ void runHQThirdStageL2Distances(const Tensor<float, 2, true>& queries,
   if (queries.canCastResize<float4>() && codewords1.canCastResize<float4>() && codewords2.canCastResize<float4>()) {
     // Can load using the vectorized type
     auto queriesV = queries.castResize<float4>();
+    auto codewordsIMIV = codewordsIMI.castResize<float4>();
     auto codewords1V = codewords1.castResize<float4>();
     auto codewords2V = codewords2.castResize<float4>();
 
@@ -258,19 +262,19 @@ void runHQThirdStageL2Distances(const Tensor<float, 2, true>& queries,
 
     switch (numCodes2) {
       case 2: {
-        RUN_L2(float, float4, queriesV, codewords1V, codewords2V, 2);
+        RUN_L2(float, float4, queriesV, codewordsIMIV, codewords1V, codewords2V, 2);
         break;
       }
       case 4: {
-        RUN_L2(float, float4, queriesV, codewords1V, codewords2V, 4);
+        RUN_L2(float, float4, queriesV, codewordsIMIV, codewords1V, codewords2V, 4);
         break;
       }
       case 6: {
-        RUN_L2(float, float4, queriesV, codewords1V, codewords2V, 6);
+        RUN_L2(float, float4, queriesV, codewordsIMIV, codewords1V, codewords2V, 6);
         break;
       }
       case 8: {
-        RUN_L2(float, float4, queriesV, codewords1V, codewords2V, 8);
+        RUN_L2(float, float4, queriesV, codewordsIMIV, codewords1V, codewords2V, 8);
         break;
       }
       default: {
@@ -291,19 +295,19 @@ void runHQThirdStageL2Distances(const Tensor<float, 2, true>& queries,
 
     switch (numCodes2) {
       case 2: {
-        RUN_L2(float, float, queries, codewords1, codewords2, 2);
+        RUN_L2(float, float, queries, codewordsIMI, codewords1, codewords2, 2);
         break;
       }
       case 4: {
-        RUN_L2(float, float, queries, codewords1, codewords2, 4);
+        RUN_L2(float, float, queries, codewordsIMI, codewords1, codewords2, 4);
         break;
       }
       case 6: {
-        RUN_L2(float, float, queries, codewords1, codewords2, 6);
+        RUN_L2(float, float, queries, codewordsIMI, codewords1, codewords2, 6);
         break;
       }
       case 8: {
-        RUN_L2(float, float, queries, codewords1, codewords2, 8);
+        RUN_L2(float, float, queries, codewordsIMI, codewords1, codewords2, 8);
         break;
       }
       default: {
