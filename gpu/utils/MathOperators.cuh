@@ -60,7 +60,7 @@ struct Math {
     return (T) 0;
   }
   static inline __device__ T abs(T v) {
-    return abs(v);
+    return (v < 0 ? -v : v);
   }
   static inline __device__ int argMin(T ) {
     return 0;
@@ -229,11 +229,7 @@ struct Math<float4> {
   }
 
   static inline __device__ float4 abs(float4 v) {
-    v.x = abs(v.x);
-    v.y = abs(v.y);
-    v.z = abs(v.z);
-    v.w = abs(v.w);
-    return v;
+    return abs(v);
   }
   static inline __device__ int argMin(float4 v) {
     int id = 0;
