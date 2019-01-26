@@ -54,7 +54,7 @@ DeviceTensor<T, Dim, true> toDevice(GpuResources* resources,
 
 /// Copies a device array's allocation to an address, if necessary
 template <typename T>
-inline void fromDevice(T* src, T* dst, size_t num, cudaStream_t stream) {
+inline void fromDevice(const T* src, T* dst, size_t num, cudaStream_t stream) {
   // It is possible that the array already represents memory at `p`,
   // in which case no copy is needed
   if (src == dst) {
@@ -80,7 +80,7 @@ inline void fromDevice(T* src, T* dst, size_t num, cudaStream_t stream) {
 
 /// Copies a device array's allocation to an address, if necessary
 template <typename T, int Dim>
-void fromDevice(Tensor<T, Dim, true>& src, T* dst, cudaStream_t stream) {
+void fromDevice(const Tensor<T, Dim, true>& src, T* dst, cudaStream_t stream) {
   FAISS_ASSERT(src.isContiguous());
   fromDevice(src.data(), dst, src.numElements(), stream);
 }
