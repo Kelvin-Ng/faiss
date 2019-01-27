@@ -11,6 +11,11 @@
 #include "L2DistanceWithVectorHQ.cuh"
 #include "HQSecondStage.cuh"
 #include "HQThirdStage.cuh"
+#include "../utils/HostTensor.cuh"
+#include "../utils/CopyUtils.cuh"
+
+#include <thrust/transform_scan.h>
+#include <thrust/execution_policy.h>
 
 namespace faiss { namespace gpu {
 
@@ -59,6 +64,46 @@ void runComputeHQL2DistanceTable(const Tensor<float, 2, true>& deviceQueries,
     streamWait(streams, {stream});
 }
 
+void runInitializeHQLists(thrust::device_vector<const void*>& deviceListCodes1,
+                          thrust::device_vector<const void*>& deviceListCodes2,
+                          std::vector<const faiss::Index::idx_t*>& listIndices,
+                          const thrust::device_vector<int>& deviceListLengths,
+                          const int* listLengths,
+                          const thrust::device_vector<unsigned char>& deviceListCodes1Data,
+                          const thrust::device_vector<unsigned char>& deviceListCodes2Data,
+                          const faiss::Index::idx_t* listIndicesData,
+                          int numCodes2,
+                          GpuResources* resources) {
+    auto stream = resources->getDefaultStreamCurrentDevice();
+    auto streams = resources->getAlternateStreamsCurrentDevice();
+
+    thrust::transform_exclusive_scan(thrust::cuda::par.on(streams[0]),
+                                     (const uintptr_t*)deviceListLengths.data().get(),
+                                     (const uintptr_t*)(deviceListLengths.data().get() + deviceListLengths.size()),
+                                     (uintptr_t*)deviceListCodes1.data().get(),
+                                     [] __device__ (int len) -> uintptr_t { return (uintptr_t)len * 2; },
+                                     (uintptr_t)deviceListCodes1Data.data().get(),
+                                     thrust::plus<uintptr_t>());
+
+    thrust::transform_exclusive_scan(thrust::cuda::par.on(streams[1]),
+                                     (const uintptr_t*)deviceListLengths.data().get(),
+                                     (const uintptr_t*)(deviceListLengths.data().get() + deviceListLengths.size()),
+                                     (uintptr_t*)deviceListCodes2.data().get(),
+                                     [numCodes2] __device__ (int len) -> uintptr_t { return (uintptr_t)len * numCodes2; },
+                                     (uintptr_t)deviceListCodes2Data.data().get(),
+                                     thrust::plus<uintptr_t>());
+
+    thrust::transform_exclusive_scan(thrust::host,
+                                     (const uintptr_t*)listLengths,
+                                     (const uintptr_t*)(listLengths + deviceListLengths.size()),
+                                     (uintptr_t*)listIndices.data(),
+                                     [] (int len) -> uintptr_t { return (uintptr_t)len; },
+                                     (uintptr_t)listIndicesData,
+                                     thrust::plus<uintptr_t>());
+
+    streamWait(streams, {stream});
+}
+
 HQ::HQ(GpuResources* resources,
        DeviceTensor<float, 4, true> deviceFineCentroids,
        DeviceTensor<float, 3, true> deviceCodewordsIMI,
@@ -66,6 +111,9 @@ HQ::HQ(GpuResources* resources,
        DeviceTensor<float, 4, true> deviceCodewords2,
        thrust::device_vector<unsigned char> deviceListCodes1Data,
        thrust::device_vector<unsigned char> deviceListCodes2Data,
+       const faiss::Index::idx_t* listIndicesData,
+       thrust::device_vector<int> deviceListLengths,
+       const int* listLengths,
        SimpleIMI* simpleIMI,
        int numCodes2,
        bool l2Distance) : resources_(resources),
@@ -81,16 +129,19 @@ HQ::HQ(GpuResources* resources,
                           simpleIMI_(simpleIMI),
                           numCodes2_(numCodes2),
                           l2Distance_(l2Distance) {
-    auto stream = resources_->getDefaultStreamCurrentDevice();
-    auto streams = resources->getAlternateStreamsCurrentDevice();
-
-    thrust::transform_exclusive_scan(thrust::cuda::par.on(streams[0]), deviceListLengths_.begin(), deviceListLengths_.end(), deviceListCodes1_.begin(), [](int len) { return (unsigned long long)len * 4 }, deviceListCodes1Data_.data().get(), thrust::plus<unsigned long long>());
-    thrust::transform_exclusive_scan(thrust::cuda::par.on(streams[1]), deviceListLengths_.begin(), deviceListLengths_.end(), deviceListCodes2_.begin(), [](int len) { return (unsigned long long)len * 4 }, deviceListCodes2Data_.data().get(), thrust::plus<unsigned long long>());
-
-    streamWait(streams, {stream});
+    runInitializeHQLists(deviceListCodes1_,
+                         deviceListCodes2_,
+                         listIndices_,
+                         deviceListLengths_,
+                         listLengths,
+                         deviceListCodes1Data_,
+                         deviceListCodes2Data_,
+                         listIndicesData,
+                         numCodes2_,
+                         resources_);
 }
 
-void HQ::query(const Tensor<float, 2, true>& deviceQueries, int imiNprobeSquareLen, int imiNprobeSideLen, int secondStageNProbe, int k, Tensor<float, 2, true>& deviceOutDistances, Tensor<int, 3, true>& deviceOutIndices) {
+void HQ::query(const Tensor<float, 2, true>& deviceQueries, int imiNprobeSquareLen, int imiNprobeSideLen, int secondStageNProbe, int k, Tensor<float, 2, true>& deviceOutDistances, Tensor<faiss::Index::idx_t, 2, true>& outIndices) {
     auto stream = resources_->getDefaultStreamCurrentDevice();
     auto& mem = resources_->getMemoryManagerCurrentDevice();
 
@@ -108,8 +159,8 @@ void HQ::query(const Tensor<float, 2, true>& deviceQueries, int imiNprobeSquareL
     runHQSecondStage(deviceIMIOutIndices,
                      deviceIMIOutUpperBounds,
                      deviceDistanceTable,
-                     deviceListCodes1_,
-                     deviceListLengths_,
+                     deviceListCodes1_.data().get(),
+                     deviceListLengths_.data().get(),
                      secondStageNProbe,
                      imiNprobe,
                      imiNprobeSquareLen,
@@ -119,10 +170,11 @@ void HQ::query(const Tensor<float, 2, true>& deviceQueries, int imiNprobeSquareL
                      resources_,
                      stream);
 
+    DeviceTensor<int, 3, true> deviceThirdStageIndices(mem, {3, deviceQueries.getSize(0), k}, stream);
     runHQThirdStage(deviceQueries,
                     deviceSecondStageIndices,
-                    deviceListCodes1_,
-                    deviceListCodes2_,
+                    deviceListCodes1_.data().get(),
+                    deviceListCodes2_.data().get(),
                     deviceCodewordsIMI_,
                     deviceCodewords1_,
                     deviceCodewords2_,
@@ -131,9 +183,20 @@ void HQ::query(const Tensor<float, 2, true>& deviceQueries, int imiNprobeSquareL
                     k,
                     l2Distance_,
                     deviceOutDistances,
-                    deviceOutIndices,
+                    deviceThirdStageIndices,
                     resources_,
                     stream);
+
+    HostTensor<int, 3, true> thirdStageIndices({3, deviceQueries.getSize(0), k});
+    fromDevice<int, 3>(deviceThirdStageIndices, thirdStageIndices.data(), stream);
+    
+    for (int qid = 0; qid < deviceQueries.getSize(0); ++qid) {
+        for (int rank = 0; rank < k; ++rank) {
+            uint64_t listId = (uint64_t)thirdStageIndices[0][qid][rank] * deviceFineCentroids_.getSize(1) + thirdStageIndices[1][qid][rank];
+            int offset = thirdStageIndices[2][qid][rank];
+            outIndices[qid][rank] = listIndices_[listId][offset];
+        }
+    }
 }
 
 } } // namespace
