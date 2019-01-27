@@ -126,6 +126,7 @@ HQ::HQ(GpuResources* resources,
                           deviceListLengths_(std::move(deviceListLengths)),
                           deviceListCodes1_(deviceListLengths_.size()),
                           deviceListCodes2_(deviceListLengths_.size()),
+                          listIndices_(deviceListLengths_.size()),
                           simpleIMI_(simpleIMI),
                           numCodes2_(numCodes2),
                           l2Distance_(l2Distance) {
