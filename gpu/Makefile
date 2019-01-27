@@ -49,6 +49,7 @@ CUOBJ =     impl/BinaryDistance.o \
             impl/HQThirdStageL2Distances.o \
             impl/L2DistanceWithVectorHQ.o \
             impl/SimpleIMI.o \
+            impl/SimpleIMICut.o \
             GpuDistance.o \
             GpuIndex.o \
             GpuIndexBinaryFlat.o \

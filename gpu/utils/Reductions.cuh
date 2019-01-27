@@ -14,6 +14,7 @@
 #include "ReductionOperators.cuh"
 #include "StaticUtils.h"
 #include "WarpShuffles.cuh"
+#include <thrust/tuple.h>
 #include <cuda.h>
 
 namespace faiss { namespace gpu {
@@ -26,6 +27,21 @@ __device__ inline T warpReduceAll(T val, Op op) {
   }
 
   return val;
+}
+
+template <typename T, int ReduceWidth = kWarpSize>
+__device__ inline thrust::tuple<T, int> warpReduceAllMin(T val, int id) {
+#pragma unroll
+  for (int mask = ReduceWidth / 2; mask > 0; mask >>= 1) {
+    int peer_id = shfl_xor(id, mask);
+    T peer_val = shfl_xor(val, mask);
+    if (peer_val < val) {
+      id = peer_id;
+    }
+    val = min(val, peer_val);
+  }
+
+  return thrust::make_tuple(val, id);
 }
 
 /// Sums a register value across all warp threads
