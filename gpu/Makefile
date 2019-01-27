@@ -56,6 +56,7 @@ CUOBJ =     impl/BinaryDistance.o \
             GpuIndexIVF.o \
             GpuIndexIVFFlat.o \
             GpuIndexIVFPQ.o  \
+            GpuIndexHQ.o \
             utils/Float16.o \
             utils/MatrixMult.o \
             utils/BlockSelectFloat.o \
