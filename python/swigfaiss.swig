@@ -221,6 +221,7 @@ int get_num_gpus();
 #include "gpu/GpuIndexIVFPQ.h"
 #include "gpu/GpuIndexIVFFlat.h"
 #include "gpu/GpuIndexBinaryFlat.h"
+#include "gpu/GpuIndexHQ.h"
 #include "gpu/IndexProxy.h"
 #include "gpu/GpuAutoTune.h"
 #include "gpu/GpuDistance.h"
@@ -309,6 +310,7 @@ int get_num_gpus()
 %include "gpu/GpuIndexIVFPQ.h"
 %include "gpu/GpuIndexIVFFlat.h"
 %include "gpu/GpuIndexBinaryFlat.h"
+%include "gpu/GpuIndexHQ.h"
 %include "gpu/IndexProxy.h"
 %include "gpu/GpuDistance.h"
 
@@ -481,6 +483,7 @@ struct AsyncIndexSearchC {
     DOWNCAST_GPU ( GpuIndexIVFPQ )
     DOWNCAST_GPU ( GpuIndexIVFFlat )
     DOWNCAST_GPU ( GpuIndexFlat )
+    DOWNCAST_GPU ( GpuIndexHQ )
 #endif
     // default for non-recognized classes
     DOWNCAST ( Index )
