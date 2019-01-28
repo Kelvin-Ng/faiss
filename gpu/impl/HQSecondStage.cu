@@ -283,7 +283,6 @@ void runHQSecondStage(const Tensor<int, 3, true>& deviceIMIIndices,
                       const Tensor<float, 4, true>& deviceDistanceTable,
                       const void** deviceListCodes,
                       const int* deviceListLengths,
-                      int numQueries,
                       int k,
                       int numListsPerQuery,
                       int nprobeSquareLen,
@@ -296,6 +295,8 @@ void runHQSecondStage(const Tensor<int, 3, true>& deviceIMIIndices,
                       Tensor<int, 3, true>& deviceOutIndices,
                       GpuResources* resources,
                       cudaStream_t stream) {
+    int numQueries = deviceOutIndices.getSize(1);
+
     auto& mem = resources->getMemoryManagerCurrentDevice();
 
     using ListIdT = unsigned long long; // TODO: make it configurable
