@@ -42,6 +42,16 @@ class GpuIndexHQ : public GpuIndex {
                GpuIndexConfig config);
 
   protected:
+    virtual void addImpl_(Index::idx_t n,
+                          const float* x,
+                          const Index::idx_t* ids) override {
+      FAISS_ASSERT_MSG(false, "Not implemented");
+    }
+
+    void reset() override {
+      FAISS_ASSERT_MSG(false, "Not implemented");
+    }
+
     // Called from GpuIndex for search
     void searchImpl_(
         faiss::Index::idx_t n,
