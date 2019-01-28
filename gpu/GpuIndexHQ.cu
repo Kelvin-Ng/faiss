@@ -27,7 +27,6 @@ GpuIndexHQ::GpuIndexHQ(GpuResources* resources,
                        int secondStageNProbe,
                        const float* centroids,
                        const float* fineCentroids,
-                       const float* codewordsIMI,
                        const float* codewords1,
                        const float* codewords2,
                        const unsigned char* listCodes1Data,
@@ -41,9 +40,8 @@ GpuIndexHQ::GpuIndexHQ(GpuResources* resources,
     secondStageNProbe_(secondStageNProbe) {
   auto stream = resources_->getDefaultStream(device_);
 
-  auto deviceCentroids = toDevice<float, 3>(resources_, device_, const_cast<float*>(centroids), stream, {2, imiSize, dims});
+  deviceCentroids_ = toDevice<float, 3>(resources_, device_, const_cast<float*>(centroids), stream, {2, imiSize, dims});
   auto deviceFineCentroids = toDevice<float, 4>(resources_, device_, const_cast<float*>(fineCentroids), stream, {2, imiSize, 256, dims});
-  auto deviceCodewordsIMI = toDevice<float, 3>(resources_, device_, const_cast<float*>(codewordsIMI), stream, {2, imiSize, dims});
   auto deviceCodewords1 = toDevice<float, 4>(resources_, device_, const_cast<float*>(codewords1), stream, {2, imiSize, 256, dims});
   auto deviceCodewords2 = toDevice<float, 4>(resources_, device_, const_cast<float*>(codewords2), stream, {numCodes2 / 2, 256, 256, dims});
   thrust::device_vector<unsigned char> deviceListCodes1Data(numData * 2);
@@ -56,12 +54,12 @@ GpuIndexHQ::GpuIndexHQ(GpuResources* resources,
   // TODO: make_unique should be safer, but is not supported in C++11
 
   simpleIMI_.reset(new SimpleIMI(resources_,
-                                 std::move(deviceCentroids),
+                                 deviceCentroids_,
                                  metric == faiss::METRIC_L2));
 
   index_.reset(new HQ(resources_,
                       std::move(deviceFineCentroids),
-                      std::move(deviceCodewordsIMI),
+                      deviceCentroids_,
                       std::move(deviceCodewords1),
                       std::move(deviceCodewords2),
                       std::move(deviceListCodes1Data),

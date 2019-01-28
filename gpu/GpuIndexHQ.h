@@ -32,7 +32,6 @@ class GpuIndexHQ : public GpuIndex {
                int secondStageNProbe,
                const float* centroids,
                const float* fineCentroids,
-               const float* codewordsIMI,
                const float* codewords1,
                const float* codewords2,
                const unsigned char* listCodes1Data,
@@ -63,6 +62,8 @@ class GpuIndexHQ : public GpuIndex {
     int imiNprobeSquareLen_;
     int imiNprobeSideLen_;
     int secondStageNProbe_;
+
+    DeviceTensor<float, 3, true> deviceCentroids_;
 
     std::unique_ptr<HQ> index_;
     std::unique_ptr<SimpleIMI> simpleIMI_;
