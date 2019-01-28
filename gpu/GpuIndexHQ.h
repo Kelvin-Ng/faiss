@@ -38,7 +38,7 @@ class GpuIndexHQ : public GpuIndex {
                const unsigned char* listCodes2Data,
                const faiss::Index::idx_t* listIndicesData,
                const int* listLengths,
-               GpuIndexConfig config);
+               GpuIndexConfig config = GpuIndexConfig());
 
   protected:
     virtual void addImpl_(Index::idx_t n,
