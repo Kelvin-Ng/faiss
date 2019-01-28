@@ -3207,6 +3207,14 @@ class IndexIVFStats(_object):
     __swig_getmethods__["nheap_updates"] = _swigfaiss_gpu.IndexIVFStats_nheap_updates_get
     if _newclass:
         nheap_updates = _swig_property(_swigfaiss_gpu.IndexIVFStats_nheap_updates_get, _swigfaiss_gpu.IndexIVFStats_nheap_updates_set)
+    __swig_setmethods__["quantization_time"] = _swigfaiss_gpu.IndexIVFStats_quantization_time_set
+    __swig_getmethods__["quantization_time"] = _swigfaiss_gpu.IndexIVFStats_quantization_time_get
+    if _newclass:
+        quantization_time = _swig_property(_swigfaiss_gpu.IndexIVFStats_quantization_time_get, _swigfaiss_gpu.IndexIVFStats_quantization_time_set)
+    __swig_setmethods__["search_time"] = _swigfaiss_gpu.IndexIVFStats_search_time_set
+    __swig_getmethods__["search_time"] = _swigfaiss_gpu.IndexIVFStats_search_time_get
+    if _newclass:
+        search_time = _swig_property(_swigfaiss_gpu.IndexIVFStats_search_time_get, _swigfaiss_gpu.IndexIVFStats_search_time_set)
 
     def __init__(self):
         this = _swigfaiss_gpu.new_IndexIVFStats()
@@ -5521,6 +5529,28 @@ class GpuIndexBinaryFlat(IndexBinary):
         return _swigfaiss_gpu.GpuIndexBinaryFlat_reconstruct(self, key, recons)
 GpuIndexBinaryFlat_swigregister = _swigfaiss_gpu.GpuIndexBinaryFlat_swigregister
 GpuIndexBinaryFlat_swigregister(GpuIndexBinaryFlat)
+
+class GpuIndexHQ(GpuIndex):
+    __swig_setmethods__ = {}
+    for _s in [GpuIndex]:
+        __swig_setmethods__.update(getattr(_s, '__swig_setmethods__', {}))
+    __setattr__ = lambda self, name, value: _swig_setattr(self, GpuIndexHQ, name, value)
+    __swig_getmethods__ = {}
+    for _s in [GpuIndex]:
+        __swig_getmethods__.update(getattr(_s, '__swig_getmethods__', {}))
+    __getattr__ = lambda self, name: _swig_getattr(self, GpuIndexHQ, name)
+    __repr__ = _swig_repr
+
+    def __init__(self, resources, dims, metric, imiSize, numData, numCodes2, imiNprobeSquareLen, imiNprobeSideLen, secondStageNProbe, centroids, fineCentroids, codewords1, codewords2, listCodes1Data, listCodes2Data, listIndicesData, listLengths, config):
+        this = _swigfaiss_gpu.new_GpuIndexHQ(resources, dims, metric, imiSize, numData, numCodes2, imiNprobeSquareLen, imiNprobeSideLen, secondStageNProbe, centroids, fineCentroids, codewords1, codewords2, listCodes1Data, listCodes2Data, listIndicesData, listLengths, config)
+        try:
+            self.this.append(this)
+        except __builtin__.Exception:
+            self.this = this
+    __swig_destroy__ = _swigfaiss_gpu.delete_GpuIndexHQ
+    __del__ = lambda self: None
+GpuIndexHQ_swigregister = _swigfaiss_gpu.GpuIndexHQ_swigregister
+GpuIndexHQ_swigregister(GpuIndexHQ)
 
 class IndexProxy(Index):
     __swig_setmethods__ = {}

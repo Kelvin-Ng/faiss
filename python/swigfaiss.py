@@ -3057,6 +3057,14 @@ class IndexIVFStats(_object):
     __swig_getmethods__["nheap_updates"] = _swigfaiss.IndexIVFStats_nheap_updates_get
     if _newclass:
         nheap_updates = _swig_property(_swigfaiss.IndexIVFStats_nheap_updates_get, _swigfaiss.IndexIVFStats_nheap_updates_set)
+    __swig_setmethods__["quantization_time"] = _swigfaiss.IndexIVFStats_quantization_time_set
+    __swig_getmethods__["quantization_time"] = _swigfaiss.IndexIVFStats_quantization_time_get
+    if _newclass:
+        quantization_time = _swig_property(_swigfaiss.IndexIVFStats_quantization_time_get, _swigfaiss.IndexIVFStats_quantization_time_set)
+    __swig_setmethods__["search_time"] = _swigfaiss.IndexIVFStats_search_time_set
+    __swig_getmethods__["search_time"] = _swigfaiss.IndexIVFStats_search_time_get
+    if _newclass:
+        search_time = _swig_property(_swigfaiss.IndexIVFStats_search_time_get, _swigfaiss.IndexIVFStats_search_time_set)
 
     def __init__(self):
         this = _swigfaiss.new_IndexIVFStats()
