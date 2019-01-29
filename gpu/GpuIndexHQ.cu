@@ -27,7 +27,6 @@ GpuIndexHQ::GpuIndexHQ(GpuResources* resources,
                        int secondStageNProbe,
                        const float* centroids,
                        const float* fineCentroids,
-                       const float* codewords1,
                        const float* codewords2,
                        const unsigned char* listCodes1Data,
                        const unsigned char* listCodes2Data,
@@ -42,7 +41,6 @@ GpuIndexHQ::GpuIndexHQ(GpuResources* resources,
 
   auto deviceCentroids = toDevice<float, 3>(resources_, device_, const_cast<float*>(centroids), stream, {2, imiSize, dims});
   auto deviceFineCentroids = toDevice<float, 4>(resources_, device_, const_cast<float*>(fineCentroids), stream, {2, imiSize, 256, dims});
-  auto deviceCodewords1 = toDevice<float, 4>(resources_, device_, const_cast<float*>(codewords1), stream, {2, imiSize, 256, dims});
   auto deviceCodewords2 = toDevice<float, 4>(resources_, device_, const_cast<float*>(codewords2), stream, {numCodes2 / 2, 256, 256, dims});
   thrust::device_vector<unsigned char> deviceListCodes1Data(numData * 2);
   cudaMemcpy(deviceListCodes1Data.data().get(), listCodes1Data, numData * 2, cudaMemcpyHostToDevice);
@@ -59,7 +57,6 @@ GpuIndexHQ::GpuIndexHQ(GpuResources* resources,
 
   index_.reset(new HQ(resources_,
                       std::move(deviceFineCentroids),
-                      std::move(deviceCodewords1),
                       std::move(deviceCodewords2),
                       std::move(deviceListCodes1Data),
                       std::move(deviceListCodes2Data),

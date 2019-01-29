@@ -23,7 +23,6 @@ class HQ {
   public:
     HQ(GpuResources* resources,
        DeviceTensor<float, 4, true> deviceFineCentroids,
-       DeviceTensor<float, 4, true> deviceCodewords1,
        DeviceTensor<float, 4, true> deviceCodewords2,
        thrust::device_vector<unsigned char> deviceListCodes1Data,
        thrust::device_vector<unsigned char> deviceListCodes2Data,
@@ -48,7 +47,6 @@ class HQ {
     thrust::device_vector<unsigned char> deviceListCodes1Data_;
     thrust::device_vector<unsigned char> deviceListCodes2Data_;
     thrust::device_vector<int> deviceListLengths_;
-    DeviceTensor<float, 4, true> deviceCodewords1_;
     DeviceTensor<float, 4, true> deviceCodewords2_;
     int imiSize_;
     int numCodes2_;

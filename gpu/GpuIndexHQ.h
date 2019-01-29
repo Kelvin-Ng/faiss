@@ -32,7 +32,6 @@ class GpuIndexHQ : public GpuIndex {
                int secondStageNProbe,
                const float* centroids,
                const float* fineCentroids,
-               const float* codewords1,
                const float* codewords2,
                const unsigned char* listCodes1Data,
                const unsigned char* listCodes2Data,
