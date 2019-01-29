@@ -5541,8 +5541,8 @@ class GpuIndexHQ(GpuIndex):
     __getattr__ = lambda self, name: _swig_getattr(self, GpuIndexHQ, name)
     __repr__ = _swig_repr
 
-    def __init__(self, resources, dims, metric, imiSize, numData, numCodes2, imiNprobeSquareLen, imiNprobeSideLen, secondStageNProbe, centroids, fineCentroids, codewords1, codewords2, listCodes1Data, listCodes2Data, listIndicesData, listLengths, config):
-        this = _swigfaiss_gpu.new_GpuIndexHQ(resources, dims, metric, imiSize, numData, numCodes2, imiNprobeSquareLen, imiNprobeSideLen, secondStageNProbe, centroids, fineCentroids, codewords1, codewords2, listCodes1Data, listCodes2Data, listIndicesData, listLengths, config)
+    def __init__(self, *args):
+        this = _swigfaiss_gpu.new_GpuIndexHQ(*args)
         try:
             self.this.append(this)
         except __builtin__.Exception:
