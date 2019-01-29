@@ -52,6 +52,7 @@ class HQ {
     const Tensor<float, 3, true>& deviceCodewordsIMI_;
     DeviceTensor<float, 4, true> deviceCodewords1_;
     DeviceTensor<float, 4, true> deviceCodewords2_;
+    int imiSize_;
     int numCodes2_;
 };
 

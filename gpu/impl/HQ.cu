@@ -128,6 +128,7 @@ HQ::HQ(GpuResources* resources,
                           deviceListCodes2_(deviceListLengths_.size()),
                           listIndices_(deviceListLengths_.size()),
                           simpleIMI_(simpleIMI),
+                          imiSize_(deviceFineCentroids_.getSize(1)),
                           numCodes2_(numCodes2),
                           l2Distance_(l2Distance) {
     runInitializeHQLists(deviceListCodes1_,
@@ -146,7 +147,7 @@ void HQ::query(const Tensor<float, 2, true>& deviceQueries, int imiNprobeSquareL
     auto stream = resources_->getDefaultStreamCurrentDevice();
     auto& mem = resources_->getMemoryManagerCurrentDevice();
 
-    DeviceTensor<int, 3, true> deviceIMIOutIndices(mem, {2, deviceQueries.getSize(0), deviceFineCentroids_.getSize(1)}, stream);
+    DeviceTensor<int, 3, true> deviceIMIOutIndices(mem, {2, deviceQueries.getSize(0), imiSize_}, stream);
     DeviceTensor<int, 2, true> deviceIMIOutUpperBounds(mem, {2, deviceQueries.getSize(0)}, stream);
     simpleIMI_->query(deviceQueries, imiNprobeSquareLen, imiNprobeSideLen, deviceIMIOutIndices, deviceIMIOutUpperBounds);
 
@@ -165,7 +166,7 @@ void HQ::query(const Tensor<float, 2, true>& deviceQueries, int imiNprobeSquareL
                      secondStageNProbe,
                      imiNprobe,
                      imiNprobeSquareLen,
-                     deviceFineCentroids_.getSize(1),
+                     imiSize_,
                      !l2Distance_,
                      deviceSecondStageIndices,
                      resources_,
@@ -179,7 +180,7 @@ void HQ::query(const Tensor<float, 2, true>& deviceQueries, int imiNprobeSquareL
                     deviceCodewordsIMI_,
                     deviceCodewords1_,
                     deviceCodewords2_,
-                    deviceFineCentroids_.getSize(1),
+                    imiSize_,
                     numCodes2_,
                     k,
                     l2Distance_,
@@ -193,7 +194,7 @@ void HQ::query(const Tensor<float, 2, true>& deviceQueries, int imiNprobeSquareL
     
     for (int qid = 0; qid < deviceQueries.getSize(0); ++qid) {
         for (int rank = 0; rank < k; ++rank) {
-            uint64_t listId = (uint64_t)thirdStageIndices[0][qid][rank] * deviceFineCentroids_.getSize(1) + thirdStageIndices[1][qid][rank];
+            uint64_t listId = (uint64_t)thirdStageIndices[0][qid][rank] * imiSize_ + thirdStageIndices[1][qid][rank];
             int offset = thirdStageIndices[2][qid][rank];
             outIndices[qid][rank] = listIndices_[listId][offset];
         }
