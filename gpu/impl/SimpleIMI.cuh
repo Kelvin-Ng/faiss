@@ -18,9 +18,9 @@ namespace faiss { namespace gpu {
 class SimpleIMI {
   public:
     SimpleIMI(GpuResources* resources,
-              const Tensor<float, 3, true>& deviceCentroids, // (imiId, centroidId, dim)
+              DeviceTensor<float, 3, true> deviceCentroids, // (imiId, centroidId, dim)
               bool l2Distance) : resources_(resources),
-                                 deviceCentroids_(deviceCentroids),
+                                 deviceCentroids_(std::move(deviceCentroids)),
                                  l2Distance_(l2Distance) {}
 
     void query(const Tensor<float, 2, true>& deviceQueries,
@@ -35,7 +35,7 @@ class SimpleIMI {
 
   protected:
     GpuResources* resources_;
-    const Tensor<float, 3, true>& deviceCentroids_;
+    DeviceTensor<float, 3, true> deviceCentroids_;
     bool l2Distance_;
 };
 

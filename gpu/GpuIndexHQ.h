@@ -63,8 +63,6 @@ class GpuIndexHQ : public GpuIndex {
     int imiNprobeSideLen_;
     int secondStageNProbe_;
 
-    DeviceTensor<float, 3, true> deviceCentroids_;
-
     std::unique_ptr<HQ> index_;
     std::unique_ptr<SimpleIMI> simpleIMI_;
 };

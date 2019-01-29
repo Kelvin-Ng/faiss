@@ -40,7 +40,7 @@ GpuIndexHQ::GpuIndexHQ(GpuResources* resources,
     secondStageNProbe_(secondStageNProbe) {
   auto stream = resources_->getDefaultStream(device_);
 
-  deviceCentroids_ = toDevice<float, 3>(resources_, device_, const_cast<float*>(centroids), stream, {2, imiSize, dims});
+  auto deviceCentroids = toDevice<float, 3>(resources_, device_, const_cast<float*>(centroids), stream, {2, imiSize, dims});
   auto deviceFineCentroids = toDevice<float, 4>(resources_, device_, const_cast<float*>(fineCentroids), stream, {2, imiSize, 256, dims});
   auto deviceCodewords1 = toDevice<float, 4>(resources_, device_, const_cast<float*>(codewords1), stream, {2, imiSize, 256, dims});
   auto deviceCodewords2 = toDevice<float, 4>(resources_, device_, const_cast<float*>(codewords2), stream, {numCodes2 / 2, 256, 256, dims});
@@ -54,12 +54,11 @@ GpuIndexHQ::GpuIndexHQ(GpuResources* resources,
   // TODO: make_unique should be safer, but is not supported in C++11
 
   simpleIMI_.reset(new SimpleIMI(resources_,
-                                 deviceCentroids_,
+                                 std::move(deviceCentroids),
                                  metric == faiss::METRIC_L2));
 
   index_.reset(new HQ(resources_,
                       std::move(deviceFineCentroids),
-                      deviceCentroids_,
                       std::move(deviceCodewords1),
                       std::move(deviceCodewords2),
                       std::move(deviceListCodes1Data),

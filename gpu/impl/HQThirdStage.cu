@@ -33,7 +33,6 @@ void runHQThirdStage(const Tensor<float, 2, true>& deviceQueries,
                      const Tensor<int, 3, true>& deviceIndices,
                      const void** deviceListCodes1,
                      const void** deviceListCodes2,
-                     const Tensor<float, 3, true>& deviceCodewordsIMI,
                      const Tensor<float, 4, true>& deviceCodewords1,
                      const Tensor<float, 4, true>& deviceCodewords2,
                      int imiSize,
@@ -53,7 +52,7 @@ void runHQThirdStage(const Tensor<float, 2, true>& deviceQueries,
 
     DeviceTensor<float, 2, true> deviceAllDistances(mem, {numQueries, numItems}, stream);
     // TODO: support inner product
-    runHQThirdStageL2Distances(deviceQueries, deviceIndices, deviceListCodes1, deviceListCodes2, deviceCodewordsIMI, deviceCodewords1, deviceCodewords2, imiSize, numCodes2, deviceAllDistances, true, stream);
+    runHQThirdStageL2Distances(deviceQueries, deviceIndices, deviceListCodes1, deviceListCodes2, deviceCodewords1, deviceCodewords2, imiSize, numCodes2, deviceAllDistances, true, stream);
 
     DeviceTensor<int, 2, true> deviceTmpIndices(mem, {numQueries, k}, stream);
     runBlockSelect(deviceAllDistances, deviceOutDistances, deviceTmpIndices, !l2Distance, k, stream);
