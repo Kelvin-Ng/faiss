@@ -26,27 +26,6 @@
 
 namespace faiss { namespace gpu {
 
-/*template <typename ListIdT = unsigned long long>
-__global__ void HQCalcListIds(const Tensor<int, 3, true> imiIndices, const Tensor<int, 2, true> imiUpperBounds, int nprobeSquareLen, int imiSize, Tensor<ListIdT, 2, true> listIds) {
-    int qid = blockIdx.x;
-    int overallRank = threadIdx.x;
-
-    int imiUpperBoundCol = imiUpperBounds[1][qid];
-
-    int upperBlockSize = imiUpperBoundCol * nprobeSquareLen;
-
-    int coarseRank0, coarseRank1;
-    if (overallRank > upperBlockSize) {
-        coarseRank0 = nprobeSquareLen + (overallRank - upperBlockSize) / nprobeSquareLen;
-        coarseRank1 = (overallRank - upperBlockSize) % nprobeSquareLen;
-    } else {
-        coarseRank0 = overallRank / imiUpperBoundCol;
-        coarseRank1 = overallRank % imiUpperBoundCol;
-    }
-
-    listIds[qid][overallRank] = (ListIdT)imiIndices[0][qid][coarseRank0] * imiSize + (ListIdT)imiIndices[1][qid][coarseRank1];
-}*/
-
 template <typename ListIdT = unsigned long long>
 void runHQCalcListIds(const Tensor<int, 3, true>& deviceIMIIndices, const Tensor<int, 2, true>& deviceIMIUpperBounds, int numQueries, int numListsPerQuery, int nprobeSquareLen, int imiSize, Tensor<ListIdT, 2, true>& deviceListIds, cudaStream_t stream) {
     thrust::counting_iterator<int> first(0);
@@ -62,7 +41,7 @@ void runHQCalcListIds(const Tensor<int, 3, true>& deviceIMIIndices, const Tensor
         int upperBlockSize = imiUpperBoundCol * nprobeSquareLen;
 
         int coarseRank0, coarseRank1;
-        if (overallRank > upperBlockSize) {
+        if (overallRank >= upperBlockSize) {
             coarseRank0 = nprobeSquareLen + (overallRank - upperBlockSize) / nprobeSquareLen;
             coarseRank1 = (overallRank - upperBlockSize) % nprobeSquareLen;
         } else {
@@ -132,7 +111,7 @@ HQSecondStageDistances(// (qid, overallRank) -> listId
 
   int upperBlockSize = imiUpperBoundCol * nprobeSquareLen;
   int coarseRank0, coarseRank1;
-  if (overallRank > upperBlockSize) {
+  if (overallRank >= upperBlockSize) {
     coarseRank0 = nprobeSquareLen + (overallRank - upperBlockSize) / nprobeSquareLen;
     coarseRank1 = (overallRank - upperBlockSize) % nprobeSquareLen;
   } else {
