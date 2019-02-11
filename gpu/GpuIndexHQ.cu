@@ -39,8 +39,8 @@ GpuIndexHQ::GpuIndexHQ(GpuResources* resources,
     secondStageNProbe_(secondStageNProbe) {
   auto stream = resources_->getDefaultStream(device_);
 
-  auto deviceCentroids = toDevice<float, 3>(resources_, device_, const_cast<float*>(centroids), stream, {2, imiSize, dims});
-  auto deviceFineCentroids = toDevice<float, 4>(resources_, device_, const_cast<float*>(fineCentroids), stream, {2, imiSize, 256, dims});
+  auto deviceCentroids = toDevice<float, 3>(resources_, device_, const_cast<float*>(centroids), stream, {2, imiSize, dims / 2}); // TODO: Handle cases when dims is not divisible by 2
+  auto deviceFineCentroids = toDevice<float, 4>(resources_, device_, const_cast<float*>(fineCentroids), stream, {2, imiSize, 256, dims / 2}); // TODO: Handle cases when dims is not divisible by 2
   auto deviceCodewords2 = toDevice<float, 4>(resources_, device_, const_cast<float*>(codewords2), stream, {numCodes2 / 2, 256, 256, dims});
   thrust::device_vector<unsigned char> deviceListCodes1Data(numData * 2);
   cudaMemcpy(deviceListCodes1Data.data().get(), listCodes1Data, numData * 2, cudaMemcpyHostToDevice);
