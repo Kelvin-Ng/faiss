@@ -31,10 +31,11 @@ __global__ void computeHQL2DistanceTableOneIMI(const Tensor<float, 2, true> devi
                                                Tensor<float, 3, true> outDistances) {
     int qid = blockIdx.x;
     int upper_bound = deviceIMIUpperBounds[qid];
+    auto outDistancesView = outDistances.narrowOutermost(qid, 1).view<2>();
     runL2DistanceWithVectorHQ(fineCentroids,
                               deviceIMIIndices.narrowOutermost(qid, 1).view<1>().narrowOutermost(0, upper_bound),
                               deviceQueries.narrowOutermost(qid, 1).view<1>(),
-                              outDistances.narrowOutermost(qid, 1).view<2>(),
+                              outDistancesView,
                               true,
                               0);
 }
@@ -78,24 +79,24 @@ void runInitializeHQLists(thrust::device_vector<const void*>& deviceListCodes1,
     auto streams = resources->getAlternateStreamsCurrentDevice();
 
     thrust::transform_exclusive_scan(thrust::cuda::par.on(streams[0]),
-                                     (const uintptr_t*)deviceListLengths.data().get(),
-                                     (const uintptr_t*)(deviceListLengths.data().get() + deviceListLengths.size()),
+                                     deviceListLengths.begin(),
+                                     deviceListLengths.end(),
                                      (uintptr_t*)deviceListCodes1.data().get(),
                                      [] __device__ (int len) -> uintptr_t { return (uintptr_t)len * 2; },
                                      (uintptr_t)deviceListCodes1Data.data().get(),
                                      thrust::plus<uintptr_t>());
 
     thrust::transform_exclusive_scan(thrust::cuda::par.on(streams[1]),
-                                     (const uintptr_t*)deviceListLengths.data().get(),
-                                     (const uintptr_t*)(deviceListLengths.data().get() + deviceListLengths.size()),
+                                     deviceListLengths.begin(),
+                                     deviceListLengths.end(),
                                      (uintptr_t*)deviceListCodes2.data().get(),
                                      [numCodes2] __device__ (int len) -> uintptr_t { return (uintptr_t)len * numCodes2; },
                                      (uintptr_t)deviceListCodes2Data.data().get(),
                                      thrust::plus<uintptr_t>());
 
     thrust::transform_exclusive_scan(thrust::host,
-                                     (const uintptr_t*)listLengths,
-                                     (const uintptr_t*)(listLengths + deviceListLengths.size()),
+                                     listLengths,
+                                     listLengths + deviceListLengths.size(),
                                      (uintptr_t*)listIndices.data(),
                                      [] (int len) -> uintptr_t { return (uintptr_t)len; },
                                      (uintptr_t)listIndicesData,
@@ -115,6 +116,10 @@ HQ::HQ(GpuResources* resources,
        SimpleIMI* simpleIMI,
        int numCodes2,
        bool l2Distance) : resources_(resources),
+                          simpleIMI_(simpleIMI),
+                          imiSize_(deviceFineCentroids.getSize(1)),
+                          numCodes2_(numCodes2),
+                          l2Distance_(l2Distance),
                           deviceFineCentroids_(std::move(deviceFineCentroids)),
                           deviceCodewords2_(std::move(deviceCodewords2)),
                           deviceListCodes1Data_(std::move(deviceListCodes1Data)),
@@ -122,11 +127,7 @@ HQ::HQ(GpuResources* resources,
                           deviceListLengths_(std::move(deviceListLengths)),
                           deviceListCodes1_(deviceListLengths_.size()),
                           deviceListCodes2_(deviceListLengths_.size()),
-                          listIndices_(deviceListLengths_.size()),
-                          simpleIMI_(simpleIMI),
-                          imiSize_(deviceFineCentroids_.getSize(1)),
-                          numCodes2_(numCodes2),
-                          l2Distance_(l2Distance) {
+                          listIndices_(deviceListLengths_.size()) {
     runInitializeHQLists(deviceListCodes1_,
                          deviceListCodes2_,
                          listIndices_,

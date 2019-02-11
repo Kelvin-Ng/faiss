@@ -38,18 +38,18 @@ class HQ {
   protected:
     GpuResources* resources_;
     SimpleIMI* simpleIMI_;
+    int imiSize_;
+    int numCodes2_;
     const bool l2Distance_;
     // (imiId, coarseIdx, fineIdx, dim) -> val
     DeviceTensor<float, 4, true> deviceFineCentroids_;
-    thrust::device_vector<const void*> deviceListCodes1_;
-    thrust::device_vector<const void*> deviceListCodes2_;
-    std::vector<const faiss::Index::idx_t*> listIndices_;
+    DeviceTensor<float, 4, true> deviceCodewords2_;
     thrust::device_vector<unsigned char> deviceListCodes1Data_;
     thrust::device_vector<unsigned char> deviceListCodes2Data_;
     thrust::device_vector<int> deviceListLengths_;
-    DeviceTensor<float, 4, true> deviceCodewords2_;
-    int imiSize_;
-    int numCodes2_;
+    thrust::device_vector<const void*> deviceListCodes1_;
+    thrust::device_vector<const void*> deviceListCodes2_;
+    std::vector<const faiss::Index::idx_t*> listIndices_;
 };
 
 
