@@ -14,22 +14,20 @@
 
 namespace faiss { namespace gpu {
 
-template <typename InputIndexT>
-__host__ __device__
+__device__
 void runL2DistanceWithVectorHQ(const Tensor<float, 3, true>& input, // (coarseIdx, fineIdx, dim) -> val
-                               const Tensor<InputIndexT, 1, true>& inputIndices, // coarseRank -> coarseIdx
+                               const Tensor<int, 1, true>& inputIndices, // coarseRank -> coarseIdx
                                const Tensor<float, 1, true>& vec,
-                               Tensor<float, 2, true> output, // (coarseRank, fineIdx) -> val
+                               Tensor<float, 2, true>& output, // (coarseRank, fineIdx) -> val
                                bool normSquared,
                                cudaStream_t stream);
 
 #ifdef FAISS_USE_FLOAT16
-template <typename InputIndexT>
-__host__ __device__
+__device__
 void runL2DistanceWithVectorHQ(const Tensor<half, 3, true>& input, // (coarseIdx, fineIdx, dim) -> val
-                               const Tensor<InputIndexT, 1, true>& inputIndices, // coarseRank -> coarseIdx
+                               const Tensor<int, 1, true>& inputIndices, // coarseRank -> coarseIdx
                                const Tensor<half, 1, true>& vec,
-                               Tensor<half, 2, true> output, // (coarseRank, fineIdx) -> val
+                               Tensor<float, 2, true>& output, // (coarseRank, fineIdx) -> val
                                bool normSquared,
                                cudaStream_t stream);
 #endif

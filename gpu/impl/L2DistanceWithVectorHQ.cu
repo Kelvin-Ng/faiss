@@ -20,6 +20,12 @@
 
 namespace faiss { namespace gpu {
 
+template <typename T>
+struct ObjectRawWrapper {
+  using type = T;
+  unsigned char data[sizeof(T)];
+} __attribute__((packed));
+
 // Input: (batch x dim), # repeats
 // Output: (# repeats, norm of batch vector)
 // Done under the presumption that the dimension size is not too large
@@ -31,11 +37,16 @@ namespace faiss { namespace gpu {
 // TVec: the potentially vectorized type we are loading in (e.g.,
 // float4, half2)
 template <typename T, typename TVec, typename int64_t,
-          int RowTileSize, bool NormLoop, bool NormSquared, typename InputIndexT>
-__global__ void l2DistanceWithVectorHQ(const Tensor<TVec, 3, true, int64_t> input,
-                                       const Tensor<InputIndexT, 1, true, int64_t> inputIndices,
-                                       const Tensor<TVec, 1, true, int64_t> vec,
-                                       Tensor<T, 2, true, int64_t> output) {
+          int RowTileSize, bool NormLoop, bool NormSquared>
+__global__ void l2DistanceWithVectorHQ(const ObjectRawWrapper<const Tensor<TVec, 3, true, int64_t>> input_,
+                                       const ObjectRawWrapper<const Tensor<int, 1, true, int64_t>> inputIndices_,
+                                       const ObjectRawWrapper<const Tensor<TVec, 1, true, int64_t>> vec_,
+                                       ObjectRawWrapper<Tensor<float, 2, true>> output_) {
+  const auto& input = *reinterpret_cast<typename decltype(input_)::type*>(&input_);
+  const auto& inputIndices = *reinterpret_cast<typename decltype(inputIndices_)::type*>(&inputIndices_);
+  const auto& vec = *reinterpret_cast<typename decltype(vec_)::type*>(&vec_);
+  auto& output = *reinterpret_cast<typename decltype(output_)::type*>(&output_);
+
   extern __shared__ char smemByte[]; // #warps * RowTileSize elements
   T* smem = (T*) smemByte;
 
@@ -89,7 +100,7 @@ __global__ void l2DistanceWithVectorHQ(const Tensor<TVec, 3, true, int64_t> inpu
            col < input.getSize(2); col += blockDim.x) {
 #pragma unroll
         for (int row = 0; row < RowTileSize; ++row) {
-          tmp[row] = Math<TVec>::sub(input[inputIndices[coarseRow]][fineRowStart + row][col] - vec[col]);
+          tmp[row] = Math<TVec>::sub(input[inputIndices[coarseRow]][fineRowStart + row][col], vec[col]);
         }
 
 #pragma unroll
@@ -176,40 +187,39 @@ __global__ void l2DistanceWithVectorHQ(const Tensor<TVec, 3, true, int64_t> inpu
   }
 }
 
-template <typename T, typename TVec, typename int64_t, typename InputIndexT>
-__host__ __device__
+template <typename T, typename TVec, typename int64_t>
+__device__
 void runL2DistanceWithVectorHQ(const Tensor<T, 3, true, int64_t>& input, // (coarseIdx, fineIdx, dim) -> val
-                               const Tensor<InputIndexT, 1, true, int64_t>& inputIndices, // coarseRank -> coarseIdx
+                               const Tensor<int, 1, true, int64_t>& inputIndices, // coarseRank -> coarseIdx
                                const Tensor<T, 1, true, int64_t>& vec,
-                               Tensor<T, 2, true, int64_t> output, // (coarseRank, fineIdx) -> val
+                               Tensor<float, 2, true>& output, // (coarseRank, fineIdx) -> val
                                bool normSquared,
                                cudaStream_t stream) {
-  FAISS_ASSERT(inputIndices.getSize(0) == output.getSize(0));
-
-#ifndef __CUDA_ARCH__
-  int64_t maxThreads = (int64_t) getMaxThreadsCurrentDevice();
-#else
   int64_t maxThreads = 256; // FIXME: query this number in kernel?
-#endif
   constexpr int rowTileSize = 8;
 
 #define RUN_L2(TYPE_T, TYPE_TVEC, INPUT, INPUT_INDICES, VEC)                                \
   do {                                                                  \
+    const auto& input_ = *reinterpret_cast<const ObjectRawWrapper<const typename std::remove_reference<decltype(INPUT)>::type>*>(&INPUT); \
+    const auto& input_indices_ = *reinterpret_cast<const ObjectRawWrapper<const typename std::remove_reference<decltype(INPUT_INDICES)>::type>*>(&INPUT_INDICES); \
+    const auto& vec_ = *reinterpret_cast<const ObjectRawWrapper<const typename std::remove_reference<decltype(VEC)>::type>*>(&VEC); \
+    auto& output_ = *reinterpret_cast<ObjectRawWrapper<typename std::remove_reference<decltype(output)>::type>*>(&output); \
+                                                                        \
     if (normLoop) {                                                     \
       if (normSquared) {                                                \
         l2DistanceWithVectorHQ<TYPE_T, TYPE_TVEC, int64_t, rowTileSize, true, true>      \
-          <<<grid, block, smem, stream>>>(INPUT, INPUT_INDICES, VEC, output);               \
+          <<<grid, block, smem, stream>>>(input_, input_indices_, vec_, output_);               \
       } else {                                                          \
         l2DistanceWithVectorHQ<TYPE_T, TYPE_TVEC, int64_t, rowTileSize, true, false>     \
-          <<<grid, block, smem, stream>>>(INPUT, INPUT_INDICES, VEC, output);               \
+          <<<grid, block, smem, stream>>>(input_, input_indices_, vec_, output_);               \
       }                                                                 \
     } else {                                                            \
       if (normSquared) {                                                \
         l2DistanceWithVectorHQ<TYPE_T, TYPE_TVEC, int64_t, rowTileSize, false, true>     \
-          <<<grid, block, smem, stream>>>(INPUT, INPUT_INDICES, VEC, output);               \
+          <<<grid, block, smem, stream>>>(input_, input_indices_, vec_, output_);               \
       } else {                                                          \
         l2DistanceWithVectorHQ<TYPE_T, TYPE_TVEC, int64_t, rowTileSize, false, false>    \
-          <<<grid, block, smem, stream>>>(INPUT, INPUT_INDICES, VEC, output);               \
+          <<<grid, block, smem, stream>>>(input_, input_indices_, vec_, output_);               \
       }                                                                 \
     }                                                                   \
   } while (0)
@@ -245,55 +255,29 @@ void runL2DistanceWithVectorHQ(const Tensor<T, 3, true, int64_t>& input, // (coa
   }
 
 #undef RUN_L2
-
-  CUDA_TEST_ERROR();
 }
 
-template <typename InputIndexT>
-__host__ __device__
+__device__
 void runL2DistanceWithVectorHQ(const Tensor<float, 3, true>& input, // (coarseIdx, fineIdx, dim) -> val
-                               const Tensor<InputIndexT, 1, true>& inputIndices, // coarseRank -> coarseIdx
+                               const Tensor<int, 1, true>& inputIndices, // coarseRank -> coarseIdx
                                const Tensor<float, 1, true>& vec,
-                               Tensor<float, 2, true> output, // (coarseRank, fineIdx) -> val
+                               Tensor<float, 2, true>& output, // (coarseRank, fineIdx) -> val
                                bool normSquared,
                                cudaStream_t stream) {
-#ifdef __CUDA_ARCH__ // we can call canUseIndexType only on CPU
+  // we can call canUseIndexType only on CPU
   runL2DistanceWithVectorHQ<float, float4>(input, inputIndices, vec, output, normSquared, stream);
-#else
-  if (input.canUseIndexType<int>()) {
-    runL2DistanceWithVectorHQ<float, float4, int>(input, inputIndices, vec, output, normSquared, stream);
-  } else {
-    auto inputCast = input.castIndexType<long>();
-    auto inputIndicesCast = inputIndices.template castIndexType<long>();
-    auto vecCast = vec.castIndexType<long>();
-    auto outputCast = output.castIndexType<long>();
-    runL2DistanceWithVectorHQ<float, float4, long>(inputCast, inputIndicesCast, vecCast, outputCast, normSquared, stream);
-  }
-#endif
 }
 
 #ifdef FAISS_USE_FLOAT16
-template <typename InputIndexT>
-__host__ __device__
+__device__
 void runL2DistanceWithVectorHQ(const Tensor<half, 3, true>& input, // (coarseIdx, fineIdx, dim) -> val
-                               const Tensor<InputIndexT, 1, true>& inputIndices, // coarseRank -> coarseIdx
+                               const Tensor<int, 1, true>& inputIndices, // coarseRank -> coarseIdx
                                const Tensor<half, 1, true>& vec,
-                               Tensor<half, 2, true> output, // (coarseRank, fineIdx) -> val
+                               Tensor<float, 2, true>& output, // (coarseRank, fineIdx) -> val
                                bool normSquared,
                                cudaStream_t stream) {
-#ifdef __CUDA_ARCH__
+  // we can call canUseIndexType only on CPU
   runL2DistanceWithVectorHQ<half, half2>(input, inputIndices, vec, output, normSquared, stream);
-#else
-  if (input.canUseIndexType<int>()) {
-    runL2DistanceWithVectorHQ<half, half2, int>(input, inputIndices, vec, output, normSquared, stream);
-  } else {
-    auto inputCast = input.castIndexType<long>();
-    auto inputIndicesCast = inputIndices.template castIndexType<long>();
-    auto vecCast = vec.castIndexType<long>();
-    auto outputCast = output.castIndexType<long>();
-    runL2DistanceWithVectorHQ<half, half2, long>(inputCast, inputIndicesCast, vecCast, outputCast, normSquared, stream);
-  }
-#endif
 }
 #endif
 
