@@ -20,13 +20,16 @@ NVCCLDFLAGS  = @NVCC_LDFLAGS@
 NVCCLIBS     = @NVCC_LIBS@
 CUDAROOT     = @CUDA_PREFIX@
 CUDACFLAGS   = @NVCC_CPPFLAGS@
+NVCCGENCODE  = -gencode arch=compute_35,code="compute_35" \
+-gencode arch=compute_52,code="compute_52" \
+-gencode arch=compute_60,code="compute_60" \
+-gencode arch=compute_61,code="compute_61"
 NVCCFLAGS    = -I $(CUDAROOT)/targets/x86_64-linux/include/ \
 -Xcompiler -fPIC \
 -Xcudafe --diag_suppress=unrecognized_attribute \
--gencode arch=compute_35,code="compute_35" \
--gencode arch=compute_52,code="compute_52" \
--gencode arch=compute_60,code="compute_60" \
--gencode arch=compute_61,code="compute_61" \
+$(NVCCGENCODE) \
+--expt-extended-lambda \
+-rdc=true \
 -lineinfo \
 -ccbin $(CXX) -DFAISS_USE_FLOAT16
 
@@ -34,6 +37,7 @@ OS = $(shell uname -s)
 
 SHAREDEXT   = so
 SHAREDFLAGS = -shared
+NVCCSHAREDFLAGS = $(SHAREDFLAGS) $(NVCCGENCODE)
 
 ifeq ($(OS),Darwin)
 	SHAREDEXT   = dylib

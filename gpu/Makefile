@@ -82,7 +82,7 @@ libgpufaiss.a: $(CPPOBJ) $(CUOBJ)
 	ar r $@ $^
 
 libgpufaiss.$(SHAREDEXT): $(CPPOBJ) $(CUOBJ)
-	$(CXX) $(SHAREDFLAGS) $(LDFLAGS) $(NVCCLDFLAGS) \
+	$(NVCC) $(NVCCSHAREDFLAGS) $(NVCCLDFLAGS) \
 		-o libgpufaiss.$(SHAREDEXT) $^ $(LIBS) $(NVCCLIBS)
 
 clean:
