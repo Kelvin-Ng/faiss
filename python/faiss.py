@@ -317,7 +317,8 @@ def replace_GpuIndexHQ_init():
 
     replace_method(GpuIndexHQ, '__init__', replacement_init_GpuIndexHQ)
 
-replace_GpuIndexHQ_init()
+if hasattr(this_module, 'GpuIndexHQ'):
+    replace_GpuIndexHQ_init()
 
 ###########################################
 # Add Python references to objects
