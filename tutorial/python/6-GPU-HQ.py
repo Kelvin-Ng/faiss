@@ -20,11 +20,16 @@ def bvecs_read(fname):
     d = a[:4].view('uint8')[0]
     return a.reshape(-1, d + 4)[:, 4:].copy()
 
+def sanitize(x):
+    """ convert array to a c-contiguous float array """
+    return np.ascontiguousarray(x.astype(np.float32))
+
+
 loaded = np.load(sys.argv[1])
 if sys.argv[3] == 'fvecs':
     xq = fvecs_read(sys.argv[2])
 else:
-    xq = bvecs_read(sys.argv[2])
+    xq = sanitize(bvecs_read(sys.argv[2]))
 
 d = loaded['codewords2'].shape[3]  # dimension
 nb = loaded['listCodes1Data'].shape[0]# database size
