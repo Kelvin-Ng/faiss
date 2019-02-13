@@ -25,8 +25,8 @@ __global__ void HQThirdStageConvertIndices(const Tensor<int, 3, true> indices, c
     converted[2][qid][rank] = (int)indices[2][qid][idx];
 }
 
-void runHQThirdStageConvertIndices(const Tensor<int, 3, true>& deviceIndices, const Tensor<int, 2, true>& deviceToConvert, Tensor<int, 3, true>& deviceConverted) {
-    HQThirdStageConvertIndices<<<deviceToConvert.getSize(0), deviceToConvert.getSize(1)>>>(deviceIndices, deviceToConvert, deviceConverted);
+void runHQThirdStageConvertIndices(const Tensor<int, 3, true>& deviceIndices, const Tensor<int, 2, true>& deviceToConvert, Tensor<int, 3, true>& deviceConverted, cudaStream_t stream) {
+    HQThirdStageConvertIndices<<<deviceToConvert.getSize(0), deviceToConvert.getSize(1), 0, stream>>>(deviceIndices, deviceToConvert, deviceConverted);
 }
 
 void runHQThirdStage(const Tensor<float, 2, true>& deviceQueries,
@@ -58,7 +58,7 @@ void runHQThirdStage(const Tensor<float, 2, true>& deviceQueries,
     runBlockSelect(deviceAllDistances, deviceOutDistances, deviceTmpIndices, !l2Distance, k, stream);
 
     // TODO: should I fuse it with block select?
-    runHQThirdStageConvertIndices(deviceIndices, deviceTmpIndices, deviceOutIndices);
+    runHQThirdStageConvertIndices(deviceIndices, deviceTmpIndices, deviceOutIndices, stream);
 }
 
 } } // namespace
