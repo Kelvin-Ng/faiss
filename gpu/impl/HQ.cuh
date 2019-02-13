@@ -26,7 +26,7 @@ class HQ {
        DeviceTensor<float, 4, true> deviceCodewords2,
        thrust::device_vector<unsigned char> deviceListCodes1Data,
        thrust::device_vector<unsigned char> deviceListCodes2Data,
-       const faiss::Index::idx_t* listIndicesData,
+       std::vector<faiss::Index::idx_t> listIndicesData,
        thrust::device_vector<int> deviceListLengths,
        const int* listLengths,
        SimpleIMI* simpleIMI,
@@ -46,6 +46,7 @@ class HQ {
     DeviceTensor<float, 4, true> deviceCodewords2_;
     thrust::device_vector<unsigned char> deviceListCodes1Data_;
     thrust::device_vector<unsigned char> deviceListCodes2Data_;
+    std::vector<faiss::Index::idx_t> listIndicesData_;
     thrust::device_vector<int> deviceListLengths_;
     thrust::device_vector<const void*> deviceListCodes1_;
     thrust::device_vector<const void*> deviceListCodes2_;

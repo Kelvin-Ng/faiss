@@ -48,6 +48,7 @@ GpuIndexHQ::GpuIndexHQ(GpuResources* resources,
   cudaMemcpy(deviceListCodes2Data.data().get(), listCodes2Data, numData * numCodes2, cudaMemcpyHostToDevice);
   thrust::device_vector<int> deviceListLengths(imiSize * imiSize);
   cudaMemcpy(deviceListLengths.data().get(), listLengths, imiSize * imiSize, cudaMemcpyHostToDevice);
+  std::vector<faiss::Index::idx_t> listIndicesDataOwned(listIndicesData, listIndicesData + numData);
 
   // TODO: make_unique should be safer, but is not supported in C++11
 
@@ -60,7 +61,7 @@ GpuIndexHQ::GpuIndexHQ(GpuResources* resources,
                       std::move(deviceCodewords2),
                       std::move(deviceListCodes1Data),
                       std::move(deviceListCodes2Data),
-                      listIndicesData,
+                      std::move(listIndicesDataOwned),
                       std::move(deviceListLengths),
                       listLengths,
                       simpleIMI_.get(),
