@@ -98,7 +98,7 @@ void runInitializeHQLists(thrust::device_vector<const void*>& deviceListCodes1,
                                      listLengths,
                                      listLengths + deviceListLengths.size(),
                                      (uintptr_t*)listIndices.data(),
-                                     [] (int len) -> uintptr_t { return (uintptr_t)len; },
+                                     [] (int len) -> uintptr_t { return (uintptr_t)len * sizeof(faiss::Index::idx_t); },
                                      (uintptr_t)listIndicesData.data(),
                                      thrust::plus<uintptr_t>());
 
