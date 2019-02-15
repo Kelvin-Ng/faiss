@@ -42,11 +42,10 @@ __global__ void simpleIMICut(Tensor<TVec, 3, true, int64_t> input,
                              int squareLen,
                              int totalLen) {
   
-  extern __shared__ char smemByte1[]; // #warps * RowTileSize elements
-  extern __shared__ char smemByte2[];
-  T* smemMin = (T*) smemByte1;
-  T* smemId  = (T*) smemByte2;
+  extern __shared__ char smemByte[]; // #warps * RowTileSize elements
+  T* __restrict__ smemMin = (T*) smemByte;
   int64_t numWarps = utils::divUp(blockDim.x, kWarpSize);
+  int* __restrict__ smemId  = (int*) (smemByte + sizeof(T) * RowTileSize * numWarps);
   int64_t laneId = getLaneId();
   int64_t warpId = threadIdx.x / kWarpSize;
 
@@ -63,7 +62,7 @@ __global__ void simpleIMICut(Tensor<TVec, 3, true, int64_t> input,
   if (lastRowTile) {
     // We are handling the very end of the input matrix rows
     for (int64_t row = 0; row < input.getSize(1) - rowStart; ++row) {
-      rowMin[0] = 1e10;
+      rowMin[0] = 1e100;
       if (NormLoop) {
         for (int64_t col = threadIdx.x;
              col < totalCol; col += blockDim.x) {
@@ -94,15 +93,16 @@ __global__ void simpleIMICut(Tensor<TVec, 3, true, int64_t> input,
     // We are guaranteed that all RowTileSize rows are available in
     // [rowStart, rowStart + RowTileSize)
 
+#pragma unroll
+    for (int row = 0; row < RowTileSize; ++row) {
+      rowMin[row] = 1e100;
+      rowId[row] = -123;
+    }
+
     if (NormLoop) {
       // A single block of threads is not big enough to span each
       // vector
       TVec tmp[RowTileSize];
-
-#pragma unroll
-      for (int row = 0; row < RowTileSize; ++row) {
-        rowMin[row] = 1e10;
-      }
 
       for (int64_t col = threadIdx.x;
            col < totalCol; col += blockDim.x) {
@@ -161,7 +161,7 @@ __global__ void simpleIMICut(Tensor<TVec, 3, true, int64_t> input,
   if (warpId == 0) {
 #pragma unroll
     for (int row = 0; row < RowTileSize; ++row) {
-      rowMin[row] = laneId < numWarps ? smemMin[row * numWarps + laneId] : 1e10;
+      rowMin[row] = laneId < numWarps ? smemMin[row * numWarps + laneId] : 1e100;
       rowId[row] = laneId < numWarps ? smemId[row * numWarps + laneId] : Math<T>::zero();
     }
 
@@ -230,7 +230,7 @@ void runSimpleIMICut(const Tensor<T, 3, true, int64_t>& input,
     auto grid = dim3(utils::divUp(inputV.getSize(1), rowTileSize));
     auto block = dim3(numThreads);
 
-    auto smem = sizeof(T) * rowTileSize * utils::divUp(numThreads, kWarpSize);
+    auto smem = (sizeof(T) + sizeof(int)) * rowTileSize * utils::divUp(numThreads, kWarpSize);
 
     RUN_L2(T, TVec, inputV);
   } else {
@@ -245,7 +245,7 @@ void runSimpleIMICut(const Tensor<T, 3, true, int64_t>& input,
     auto grid = dim3(utils::divUp(input.getSize(1), rowTileSize));
     auto block = dim3(numThreads);
 
-    auto smem = sizeof(T) * rowTileSize * utils::divUp(numThreads, kWarpSize);
+    auto smem = (sizeof(T) + sizeof(int)) * rowTileSize * utils::divUp(numThreads, kWarpSize);
     RUN_L2(T, T, input);
   }
 #undef RUN_L2
