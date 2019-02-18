@@ -98,6 +98,8 @@ GpuIndexHQ::searchImpl_(faiss::Index::idx_t n,
 
   // Copy back if necessary
   fromDevice<float, 2>(devDistances, distances, stream);
+
+  cudaDeviceSynchronize();
 }
 
 } } // namespace

@@ -53,6 +53,8 @@ void runComputeHQL2DistanceTable(const Tensor<float, 2, true>& deviceQueries,
     auto stream = resources->getDefaultStreamCurrentDevice();
     auto streams = resources->getAlternateStreamsCurrentDevice();
 
+    streamWait(streams, {stream});
+
     for (int imiId = 0; imiId < 2; ++imiId) {
         computeHQL2DistanceTableOneIMI<<<deviceQueries.getSize(0), 1, 0, streams[imiId]>>>(
                 deviceQueries.narrow(1, imiId * deviceQueries.getSize(1) / 2, deviceQueries.getSize(1) / 2), // get the data of the corresponding subspace
@@ -62,7 +64,7 @@ void runComputeHQL2DistanceTable(const Tensor<float, 2, true>& deviceQueries,
                 outDistances.narrowOutermost(imiId, 1).view<3>());
     }
 
-    streamWait(streams, {stream});
+    streamWait({stream}, streams);
 }
 
 void runInitializeHQLists(thrust::device_vector<const void*>& deviceListCodes1,
@@ -77,6 +79,8 @@ void runInitializeHQLists(thrust::device_vector<const void*>& deviceListCodes1,
                           GpuResources* resources) {
     auto stream = resources->getDefaultStreamCurrentDevice();
     auto streams = resources->getAlternateStreamsCurrentDevice();
+
+    streamWait(streams, {stream});
 
     thrust::transform_exclusive_scan(thrust::cuda::par.on(streams[0]),
                                      deviceListLengths.begin(),
@@ -102,7 +106,7 @@ void runInitializeHQLists(thrust::device_vector<const void*>& deviceListCodes1,
                                      (uintptr_t)listIndicesData.data(),
                                      thrust::plus<uintptr_t>());
 
-    streamWait(streams, {stream});
+    streamWait({stream}, streams);
 }
 
 HQ::HQ(GpuResources* resources,
@@ -188,6 +192,7 @@ void HQ::query(const Tensor<float, 2, true>& deviceQueries, int imiNprobeSquareL
 
     HostTensor<int, 3, true> thirdStageIndices({3, deviceQueries.getSize(0), k});
     fromDevice<int, 3>(deviceThirdStageIndices, thirdStageIndices.data(), stream);
+    cudaDeviceSynchronize();
     
     for (int qid = 0; qid < deviceQueries.getSize(0); ++qid) {
         for (int rank = 0; rank < k; ++rank) {
