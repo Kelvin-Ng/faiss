@@ -74,7 +74,7 @@ void runHQCalcListOffsets(const int* deviceListLengths, const Tensor<ListIdT, 2,
         return deviceListLengths[listId];
     };
 
-    thrust::transform_inclusive_scan(thrust::cuda::par(thrustAlloc).on(stream), deviceListIds.data(), deviceListIds.end(), devicePrefixSumOffsets, listId2ListLength, thrust::plus<int>());
+    thrust::transform_exclusive_scan(thrust::cuda::par(thrustAlloc).on(stream), deviceListIds.data(), deviceListIds.end(), devicePrefixSumOffsets, listId2ListLength, 0, thrust::plus<int>());
 }
 
 template <typename LookupVecT, typename ListIdT, typename LookupT>
@@ -120,8 +120,7 @@ HQSecondStageDistances(// (qid, overallRank) -> listId
   }
 
   // This is where we start writing out data
-  // We ensure that before the array (at offset -1), there is a 0 value
-  int outBase = *(prefixSumOffsets[qid][overallRank].data() - 1);
+  int outBase = prefixSumOffsets[qid][overallRank];
   float* distanceOut = distances[outBase].data();
 
   ListIdT listId = listIds[qid][overallRank];
