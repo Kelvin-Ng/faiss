@@ -34,11 +34,11 @@ HQThirdStageL2DistancesOneCol(const Tensor<TVec, 2, true>& queries,
   int halfDim = queries.getSize(1) / 2;
   bool isSecondHalf = (col >= halfDim);
 
-  char* myListCodes1 = (char*)listCodes1[listId];
-  char* myListCodes2 = (char*)listCodes2[listId];
+  const unsigned char* myListCodes1 = (const unsigned char*)listCodes1[listId];
+  const unsigned char* myListCodes2 = (const unsigned char*)listCodes2[listId];
 
-  char code1 = myListCodes1[fineId * 2 + isSecondHalf];
-  char codes2[numCodes2];
+  unsigned char code1 = myListCodes1[fineId * 2 + isSecondHalf];
+  unsigned char codes2[numCodes2];
 
 #pragma unroll
   for (int i = 0; i < numCodes2; ++i) {
