@@ -25,7 +25,7 @@ class GpuIndexHQ : public GpuIndex {
                int dims,
                faiss::MetricType metric,
                int imiSize,
-               int numData,
+               unsigned long long numData,
                int numCodes2,
                int imiNprobeSquareLen,
                int imiNprobeSideLen,
