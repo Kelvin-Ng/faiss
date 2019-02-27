@@ -24,7 +24,7 @@ void SimpleIMI::query(const Tensor<float, 2, true>& deviceQueries,
     auto stream = resources_->getDefaultStreamCurrentDevice();
     auto& mem = resources_->getMemoryManagerCurrentDevice();
 
-    DeviceTensor<float, 3, true> deviceOutDistances(mem, {2, deviceQueries.getSize(0), deviceCentroids_.getSize(1)}, stream);
+    DeviceTensor<float, 3, true> deviceOutDistances(mem, {2, deviceQueries.getSize(0), nprobeSideLen}, stream);
 
     // TODO: the two runDistance calls can run concurrently (i.e. in different streams)
     // TODO: Do not do k-selection
@@ -41,7 +41,7 @@ void SimpleIMI::query(const Tensor<float, 2, true>& deviceQueries,
                       nullptr,
                       nullptr, // compute norms in temp memory. TODO: can store it because it does not consume much memory
                       deviceQueriesView,
-                      deviceCentroids_.getSize(1),
+                      nprobeSideLen,
                       deviceOutDistancesView,
                       deviceOutIndicesView);
     }
