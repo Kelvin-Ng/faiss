@@ -42,8 +42,7 @@ inline __device__ int binarySearchForBucket(int* prefixSumOffsets,
     }
   }
 
-  // We must find the bucket that it is in
-  assert(start != size);
+  // start == size means that val is not found
 
   return start;
 }
@@ -282,7 +281,7 @@ pass2SelectIMILists(Tensor<float, 2, true> heapDistances,
       // We do this by binary search in the prefix sum list.
       int probe = binarySearchForBucket(prefixSumOffsets[queryId].data(),
                                         prefixSumOffsets.getSize(1),
-                                        offset);
+                                        offset) - 1;
 
       // This is then the probe for the query; we can find the actual
       // list ID from this
@@ -290,7 +289,7 @@ pass2SelectIMILists(Tensor<float, 2, true> heapDistances,
 
       // Now, we need to know the offset within the list
       // We ensure that before the array (at offset -1), there is a 0 value
-      int listStart = *(prefixSumOffsets[queryId][probe].data() - 1);
+      int listStart = prefixSumOffsets[queryId][probe];
       fineId = offset - listStart;
 
       imiId0 = listId / imiSize;

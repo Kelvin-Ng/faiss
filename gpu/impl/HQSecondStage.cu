@@ -74,7 +74,7 @@ void runHQCalcListOffsets(const int* deviceListLengths, const Tensor<ListIdT, 2,
         return deviceListLengths[listId];
     };
 
-    thrust::transform_exclusive_scan(thrust::cuda::par(thrustAlloc).on(stream), deviceListIds.data(), deviceListIds.end(), devicePrefixSumOffsets, listId2ListLength, 0, thrust::plus<int>());
+    thrust::transform_inclusive_scan(thrust::cuda::par(thrustAlloc).on(stream), deviceListIds.data(), deviceListIds.end(), devicePrefixSumOffsets, listId2ListLength, thrust::plus<int>());
 }
 
 template <typename LookupVecT, typename ListIdT, typename LookupT>
@@ -290,17 +290,19 @@ void runHQSecondStage(const Tensor<int, 3, true>& deviceIMIIndices,
                      deviceListIds,
                      stream);
 
-    DeviceTensor<int, 2, true> devicePrefixSumOffsets(mem,
-            {numQueries, numListsPerQuery}, stream);
+    DeviceTensor<int, 1, true> devicePrefixSumOffsetsData(mem, {numQueries * numListsPerQuery + 1}, stream);
+    cudaMemsetAsync(devicePrefixSumOffsetsData.data(), 0, sizeof(int), stream);
     runHQCalcListOffsets(deviceListLengths,
                          deviceListIds,
-                         devicePrefixSumOffsets.data(),
+                         devicePrefixSumOffsetsData.data() + 1,
                          resources,
                          stream);
+    Tensor<int, 2, true> devicePrefixSumOffsets(devicePrefixSumOffsetsData.data(), {numQueries, numListsPerQuery});
 
-    constexpr int maxListLen = 128; // FIXME: set a correct value
-    DeviceTensor<float, 2, true> deviceDistances(mem, {numQueries, maxListLen * numListsPerQuery}, stream);
-    Tensor<float, 1, true> deviceDistancesFlat = deviceDistances.downcastInner<1>();
+    int numItemsSelected;
+    cudaDeviceSynchronize();
+    cudaMemcpy(&numItemsSelected, &devicePrefixSumOffsetsData[numQueries * numListsPerQuery], sizeof(int), cudaMemcpyDeviceToHost);
+    DeviceTensor<float, 1, true> deviceDistancesFlat(mem, {numItemsSelected}, stream);
 
     runHQSecondStageDistances(deviceListIds,
                               deviceIMIUpperBounds,
