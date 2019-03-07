@@ -29,11 +29,12 @@ class HQ {
        std::vector<faiss::Index::idx_t> listIndicesData,
        thrust::device_vector<int> deviceListLengths,
        const int* listLengths,
+       DeviceTensor<float, 2, true> deviceRotate,
        SimpleIMI* simpleIMI,
        int numCodes2,
        bool l2Distance);
 
-    void query(const Tensor<float, 2, true>& deviceQueries, int imiNprobeSquareLen, int imiNprobeSideLen, int secondStageNProbe, int k, Tensor<float, 2, true>& deviceOutDistances, Tensor<faiss::Index::idx_t, 2, true>& outIndices);
+    void query(const Tensor<float, 2, true>& deviceQueriesOrig, int imiNprobeSquareLen, int imiNprobeSideLen, int secondStageNProbe, int k, Tensor<float, 2, true>& deviceOutDistances, Tensor<faiss::Index::idx_t, 2, true>& outIndices);
 
   protected:
     GpuResources* resources_;
@@ -48,6 +49,7 @@ class HQ {
     thrust::device_vector<unsigned char> deviceListCodes2Data_;
     std::vector<faiss::Index::idx_t> listIndicesData_;
     thrust::device_vector<int> deviceListLengths_;
+    DeviceTensor<float, 2, true> deviceRotate_;
     thrust::device_vector<const void*> deviceListCodes1_;
     thrust::device_vector<const void*> deviceListCodes2_;
     std::vector<const faiss::Index::idx_t*> listIndices_;

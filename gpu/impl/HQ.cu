@@ -13,6 +13,7 @@
 #include "HQThirdStage.cuh"
 #include "../utils/HostTensor.cuh"
 #include "../utils/CopyUtils.cuh"
+#include "../utils/MatrixMult.cuh"
 
 #include <thrust/transform_scan.h>
 #include <thrust/execution_policy.h>
@@ -117,6 +118,7 @@ HQ::HQ(GpuResources* resources,
        std::vector<faiss::Index::idx_t> listIndicesData,
        thrust::device_vector<int> deviceListLengths,
        const int* listLengths,
+       DeviceTensor<float, 2, true> deviceRotate,
        SimpleIMI* simpleIMI,
        int numCodes2,
        bool l2Distance) : resources_(resources),
@@ -130,6 +132,7 @@ HQ::HQ(GpuResources* resources,
                           deviceListCodes2Data_(std::move(deviceListCodes2Data)),
                           listIndicesData_(std::move(listIndicesData)),
                           deviceListLengths_(std::move(deviceListLengths)),
+                          deviceRotate_(std::move(deviceRotate)),
                           deviceListCodes1_(deviceListLengths_.size()),
                           deviceListCodes2_(deviceListLengths_.size()),
                           listIndices_(deviceListLengths_.size()) {
@@ -145,9 +148,18 @@ HQ::HQ(GpuResources* resources,
                          resources_);
 }
 
-void HQ::query(const Tensor<float, 2, true>& deviceQueries, int imiNprobeSquareLen, int imiNprobeSideLen, int secondStageNProbe, int k, Tensor<float, 2, true>& deviceOutDistances, Tensor<faiss::Index::idx_t, 2, true>& outIndices) {
+void HQ::query(const Tensor<float, 2, true>& deviceQueriesOrig, int imiNprobeSquareLen, int imiNprobeSideLen, int secondStageNProbe, int k, Tensor<float, 2, true>& deviceOutDistances, Tensor<faiss::Index::idx_t, 2, true>& outIndices) {
     auto stream = resources_->getDefaultStreamCurrentDevice();
     auto& mem = resources_->getMemoryManagerCurrentDevice();
+
+    // Rotate the queries
+    DeviceTensor<float, 2, true> deviceQueries(mem, {deviceQueriesOrig.getSize(0), deviceQueriesOrig.getSize(1)}, stream);
+    runMatrixMult(deviceQueries, false,
+                  deviceQueriesOrig, false,
+                  deviceRotate_, false,
+                  1.0f, 0.0f, false,
+                  resources_->getBlasHandleCurrentDevice(),
+                  stream);
 
     DeviceTensor<int, 3, true> deviceIMIOutIndices(mem, {2, deviceQueries.getSize(0), imiNprobeSideLen}, stream);
     DeviceTensor<int, 2, true> deviceIMIOutUpperBounds(mem, {2, deviceQueries.getSize(0)}, stream);

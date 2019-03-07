@@ -32,6 +32,7 @@ GpuIndexHQ::GpuIndexHQ(GpuResources* resources,
                        const unsigned char* listCodes2Data,
                        const faiss::Index::idx_t* listIndicesData,
                        const int* listLengths,
+                       const float* rotate,
                        GpuIndexConfig config) :
     GpuIndex(resources, dims, metric, config),
     imiNprobeSquareLen_(imiNprobeSquareLen),
@@ -42,6 +43,7 @@ GpuIndexHQ::GpuIndexHQ(GpuResources* resources,
   auto deviceCentroids = toDevice<float, 3>(resources_, device_, const_cast<float*>(centroids), stream, {2, imiSize, dims / 2}); // TODO: Handle cases when dims is not divisible by 2
   auto deviceFineCentroids = toDevice<float, 4>(resources_, device_, const_cast<float*>(fineCentroids), stream, {2, imiSize, 256, dims / 2}); // TODO: Handle cases when dims is not divisible by 2
   auto deviceCodewords2 = toDevice<float, 4>(resources_, device_, const_cast<float*>(codewords2), stream, {numCodes2 / 2, 256, 256, dims});
+  auto deviceRotate = toDevice<float, 2>(resources_, device_, const_cast<float*>(rotate), stream, {dims, dims});
   thrust::device_vector<unsigned char> deviceListCodes1Data(numData * 2);
   cudaMemcpy(deviceListCodes1Data.data().get(), listCodes1Data, numData * 2, cudaMemcpyHostToDevice);
   thrust::device_vector<unsigned char> deviceListCodes2Data(numData * numCodes2);
@@ -64,6 +66,7 @@ GpuIndexHQ::GpuIndexHQ(GpuResources* resources,
                       std::move(listIndicesDataOwned),
                       std::move(deviceListLengths),
                       listLengths,
+                      std::move(deviceRotate),
                       simpleIMI_.get(),
                       numCodes2,
                       metric == faiss::METRIC_L2));
