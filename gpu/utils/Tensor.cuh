@@ -596,6 +596,14 @@ class SubTensor {
     return tensor_.template view<SubDim>(data_);
   }
 
+  Tensor<typename TensorType::DataType,
+         SubDim,
+         TensorType::IsInnerContig,
+         typename TensorType::IndexType,
+         PtrTraits> view() const {
+    return tensor_.template view<SubDim>(data_);
+  }
+
  protected:
   /// One dimension greater can create us
   friend class SubTensor<TensorType, SubDim + 1, PtrTraits>;
