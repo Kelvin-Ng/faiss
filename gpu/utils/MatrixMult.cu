@@ -87,8 +87,8 @@ struct CublasGemm<half> {
 template <typename T>
 void
 runMatrixMult(Tensor<T, 2, true>& c, bool transC,
-              Tensor<T, 2, true>& a, bool transA,
-              Tensor<T, 2, true>& b, bool transB,
+              const Tensor<T, 2, true>& a, bool transA,
+              const Tensor<T, 2, true>& b, bool transB,
               float alpha,
               float beta,
               bool useHgemm,
@@ -117,8 +117,8 @@ runMatrixMult(Tensor<T, 2, true>& c, bool transC,
 
   // Now, we have to represent the matrix multiplication in
   // column-major layout
-  T* pA = transC ? a.data() : b.data();
-  T* pB = transC ? b.data() : a.data();
+  const T* pA = transC ? a.data() : b.data();
+  const T* pB = transC ? b.data() : a.data();
   T* pC = c.data();
 
   int m = c.getSize(1); // stride 1 size
@@ -155,8 +155,8 @@ runMatrixMult(Tensor<T, 2, true>& c, bool transC,
 }
 
 void runMatrixMult(Tensor<float, 2, true>& c, bool transC,
-                   Tensor<float, 2, true>& a, bool transA,
-                   Tensor<float, 2, true>& b, bool transB,
+                   const Tensor<float, 2, true>& a, bool transA,
+                   const Tensor<float, 2, true>& b, bool transB,
                    float alpha,
                    float beta,
                    bool useHgemm,
@@ -168,8 +168,8 @@ void runMatrixMult(Tensor<float, 2, true>& c, bool transC,
 
 #ifdef FAISS_USE_FLOAT16
 void runMatrixMult(Tensor<half, 2, true>& c, bool transC,
-                   Tensor<half, 2, true>& a, bool transA,
-                   Tensor<half, 2, true>& b, bool transB,
+                   const Tensor<half, 2, true>& a, bool transA,
+                   const Tensor<half, 2, true>& b, bool transB,
                    float alpha,
                    float beta,
                    bool useHgemm,
@@ -182,8 +182,8 @@ void runMatrixMult(Tensor<half, 2, true>& c, bool transC,
 
 void
 runIteratedMatrixMult(Tensor<float, 3, true>& c, bool transC,
-                      Tensor<float, 3, true>& a, bool transA,
-                      Tensor<float, 3, true>& b, bool transB,
+                      const Tensor<float, 3, true>& a, bool transA,
+                      const Tensor<float, 3, true>& b, bool transB,
                       float alpha,
                       float beta,
                       cublasHandle_t handle,
@@ -205,8 +205,8 @@ runIteratedMatrixMult(Tensor<float, 3, true>& c, bool transC,
 
 void
 runBatchMatrixMult(Tensor<float, 3, true>& c, bool transC,
-                   Tensor<float, 3, true>& a, bool transA,
-                   Tensor<float, 3, true>& b, bool transB,
+                   const Tensor<float, 3, true>& a, bool transA,
+                   const Tensor<float, 3, true>& b, bool transB,
                    float alpha,
                    float beta,
                    DeviceMemory& mem,
@@ -233,8 +233,8 @@ runBatchMatrixMult(Tensor<float, 3, true>& c, bool transC,
 
   // Now, we have to represent the matrix multiplication in
   // column-major layout
-  float* pA = transC ? a.data() : b.data();
-  float* pB = transC ? b.data() : a.data();
+  const float* pA = transC ? a.data() : b.data();
+  const float* pB = transC ? b.data() : a.data();
   float* pC = c.data();
 
   int m = c.getSize(2); // stride 1 size
