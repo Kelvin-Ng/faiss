@@ -312,7 +312,7 @@ def replace_GpuIndexHQ_init():
     original_init = GpuIndexHQ.__init__
 
     def replacement_init_GpuIndexHQ(self, *args):
-        args = args[:9] + tuple(swig_ptr(x) for x in args[9:16])
+        args = args[:9] + tuple(swig_ptr(x) for x in args[9:17])
         original_init(self, *args)
 
     replace_method(GpuIndexHQ, '__init__', replacement_init_GpuIndexHQ)

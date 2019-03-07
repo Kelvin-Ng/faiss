@@ -37,6 +37,7 @@ class GpuIndexHQ : public GpuIndex {
                const unsigned char* listCodes2Data,
                const faiss::Index::idx_t* listIndicesData,
                const int* listLengths,
+               const float* rotate,
                GpuIndexConfig config = GpuIndexConfig());
 
   protected:

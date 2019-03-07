@@ -69405,7 +69405,8 @@ SWIGINTERN PyObject *_wrap_new_GpuIndexHQ__SWIG_0(PyObject *SWIGUNUSEDPARM(self)
   unsigned char *arg14 = (unsigned char *) 0 ;
   faiss::Index::idx_t *arg15 = (faiss::Index::idx_t *) 0 ;
   int *arg16 = (int *) 0 ;
-  faiss::gpu::GpuIndexConfig arg17 ;
+  float *arg17 = (float *) 0 ;
+  faiss::gpu::GpuIndexConfig arg18 ;
   void *argp1 = 0 ;
   int res1 = 0 ;
   int val2 ;
@@ -69438,7 +69439,199 @@ SWIGINTERN PyObject *_wrap_new_GpuIndexHQ__SWIG_0(PyObject *SWIGUNUSEDPARM(self)
   int res15 = 0 ;
   void *argp16 = 0 ;
   int res16 = 0 ;
-  void *argp17 ;
+  void *argp17 = 0 ;
+  int res17 = 0 ;
+  void *argp18 ;
+  int res18 = 0 ;
+  PyObject * obj0 = 0 ;
+  PyObject * obj1 = 0 ;
+  PyObject * obj2 = 0 ;
+  PyObject * obj3 = 0 ;
+  PyObject * obj4 = 0 ;
+  PyObject * obj5 = 0 ;
+  PyObject * obj6 = 0 ;
+  PyObject * obj7 = 0 ;
+  PyObject * obj8 = 0 ;
+  PyObject * obj9 = 0 ;
+  PyObject * obj10 = 0 ;
+  PyObject * obj11 = 0 ;
+  PyObject * obj12 = 0 ;
+  PyObject * obj13 = 0 ;
+  PyObject * obj14 = 0 ;
+  PyObject * obj15 = 0 ;
+  PyObject * obj16 = 0 ;
+  PyObject * obj17 = 0 ;
+  faiss::gpu::GpuIndexHQ *result = 0 ;
+  
+  if (!PyArg_ParseTuple(args,(char *)"OOOOOOOOOOOOOOOOOO:new_GpuIndexHQ",&obj0,&obj1,&obj2,&obj3,&obj4,&obj5,&obj6,&obj7,&obj8,&obj9,&obj10,&obj11,&obj12,&obj13,&obj14,&obj15,&obj16,&obj17)) SWIG_fail;
+  res1 = SWIG_ConvertPtr(obj0, &argp1,SWIGTYPE_p_faiss__gpu__GpuResources, 0 |  0 );
+  if (!SWIG_IsOK(res1)) {
+    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "new_GpuIndexHQ" "', argument " "1"" of type '" "faiss::gpu::GpuResources *""'"); 
+  }
+  arg1 = reinterpret_cast< faiss::gpu::GpuResources * >(argp1);
+  ecode2 = SWIG_AsVal_int(obj1, &val2);
+  if (!SWIG_IsOK(ecode2)) {
+    SWIG_exception_fail(SWIG_ArgError(ecode2), "in method '" "new_GpuIndexHQ" "', argument " "2"" of type '" "int""'");
+  } 
+  arg2 = static_cast< int >(val2);
+  ecode3 = SWIG_AsVal_int(obj2, &val3);
+  if (!SWIG_IsOK(ecode3)) {
+    SWIG_exception_fail(SWIG_ArgError(ecode3), "in method '" "new_GpuIndexHQ" "', argument " "3"" of type '" "faiss::MetricType""'");
+  } 
+  arg3 = static_cast< faiss::MetricType >(val3);
+  ecode4 = SWIG_AsVal_int(obj3, &val4);
+  if (!SWIG_IsOK(ecode4)) {
+    SWIG_exception_fail(SWIG_ArgError(ecode4), "in method '" "new_GpuIndexHQ" "', argument " "4"" of type '" "int""'");
+  } 
+  arg4 = static_cast< int >(val4);
+  ecode5 = SWIG_AsVal_unsigned_SS_long_SS_long(obj4, &val5);
+  if (!SWIG_IsOK(ecode5)) {
+    SWIG_exception_fail(SWIG_ArgError(ecode5), "in method '" "new_GpuIndexHQ" "', argument " "5"" of type '" "unsigned long long""'");
+  } 
+  arg5 = static_cast< unsigned long long >(val5);
+  ecode6 = SWIG_AsVal_int(obj5, &val6);
+  if (!SWIG_IsOK(ecode6)) {
+    SWIG_exception_fail(SWIG_ArgError(ecode6), "in method '" "new_GpuIndexHQ" "', argument " "6"" of type '" "int""'");
+  } 
+  arg6 = static_cast< int >(val6);
+  ecode7 = SWIG_AsVal_int(obj6, &val7);
+  if (!SWIG_IsOK(ecode7)) {
+    SWIG_exception_fail(SWIG_ArgError(ecode7), "in method '" "new_GpuIndexHQ" "', argument " "7"" of type '" "int""'");
+  } 
+  arg7 = static_cast< int >(val7);
+  ecode8 = SWIG_AsVal_int(obj7, &val8);
+  if (!SWIG_IsOK(ecode8)) {
+    SWIG_exception_fail(SWIG_ArgError(ecode8), "in method '" "new_GpuIndexHQ" "', argument " "8"" of type '" "int""'");
+  } 
+  arg8 = static_cast< int >(val8);
+  ecode9 = SWIG_AsVal_int(obj8, &val9);
+  if (!SWIG_IsOK(ecode9)) {
+    SWIG_exception_fail(SWIG_ArgError(ecode9), "in method '" "new_GpuIndexHQ" "', argument " "9"" of type '" "int""'");
+  } 
+  arg9 = static_cast< int >(val9);
+  res10 = SWIG_ConvertPtr(obj9, &argp10,SWIGTYPE_p_float, 0 |  0 );
+  if (!SWIG_IsOK(res10)) {
+    SWIG_exception_fail(SWIG_ArgError(res10), "in method '" "new_GpuIndexHQ" "', argument " "10"" of type '" "float const *""'"); 
+  }
+  arg10 = reinterpret_cast< float * >(argp10);
+  res11 = SWIG_ConvertPtr(obj10, &argp11,SWIGTYPE_p_float, 0 |  0 );
+  if (!SWIG_IsOK(res11)) {
+    SWIG_exception_fail(SWIG_ArgError(res11), "in method '" "new_GpuIndexHQ" "', argument " "11"" of type '" "float const *""'"); 
+  }
+  arg11 = reinterpret_cast< float * >(argp11);
+  res12 = SWIG_ConvertPtr(obj11, &argp12,SWIGTYPE_p_float, 0 |  0 );
+  if (!SWIG_IsOK(res12)) {
+    SWIG_exception_fail(SWIG_ArgError(res12), "in method '" "new_GpuIndexHQ" "', argument " "12"" of type '" "float const *""'"); 
+  }
+  arg12 = reinterpret_cast< float * >(argp12);
+  res13 = SWIG_ConvertPtr(obj12, &argp13,SWIGTYPE_p_unsigned_char, 0 |  0 );
+  if (!SWIG_IsOK(res13)) {
+    SWIG_exception_fail(SWIG_ArgError(res13), "in method '" "new_GpuIndexHQ" "', argument " "13"" of type '" "unsigned char const *""'"); 
+  }
+  arg13 = reinterpret_cast< unsigned char * >(argp13);
+  res14 = SWIG_ConvertPtr(obj13, &argp14,SWIGTYPE_p_unsigned_char, 0 |  0 );
+  if (!SWIG_IsOK(res14)) {
+    SWIG_exception_fail(SWIG_ArgError(res14), "in method '" "new_GpuIndexHQ" "', argument " "14"" of type '" "unsigned char const *""'"); 
+  }
+  arg14 = reinterpret_cast< unsigned char * >(argp14);
+  res15 = SWIG_ConvertPtr(obj14, &argp15,SWIGTYPE_p_long, 0 |  0 );
+  if (!SWIG_IsOK(res15)) {
+    SWIG_exception_fail(SWIG_ArgError(res15), "in method '" "new_GpuIndexHQ" "', argument " "15"" of type '" "faiss::Index::idx_t const *""'"); 
+  }
+  arg15 = reinterpret_cast< faiss::Index::idx_t * >(argp15);
+  res16 = SWIG_ConvertPtr(obj15, &argp16,SWIGTYPE_p_int, 0 |  0 );
+  if (!SWIG_IsOK(res16)) {
+    SWIG_exception_fail(SWIG_ArgError(res16), "in method '" "new_GpuIndexHQ" "', argument " "16"" of type '" "int const *""'"); 
+  }
+  arg16 = reinterpret_cast< int * >(argp16);
+  res17 = SWIG_ConvertPtr(obj16, &argp17,SWIGTYPE_p_float, 0 |  0 );
+  if (!SWIG_IsOK(res17)) {
+    SWIG_exception_fail(SWIG_ArgError(res17), "in method '" "new_GpuIndexHQ" "', argument " "17"" of type '" "float const *""'"); 
+  }
+  arg17 = reinterpret_cast< float * >(argp17);
+  {
+    res18 = SWIG_ConvertPtr(obj17, &argp18, SWIGTYPE_p_faiss__gpu__GpuIndexConfig,  0  | 0);
+    if (!SWIG_IsOK(res18)) {
+      SWIG_exception_fail(SWIG_ArgError(res18), "in method '" "new_GpuIndexHQ" "', argument " "18"" of type '" "faiss::gpu::GpuIndexConfig""'"); 
+    }  
+    if (!argp18) {
+      SWIG_exception_fail(SWIG_ValueError, "invalid null reference " "in method '" "new_GpuIndexHQ" "', argument " "18"" of type '" "faiss::gpu::GpuIndexConfig""'");
+    } else {
+      faiss::gpu::GpuIndexConfig * temp = reinterpret_cast< faiss::gpu::GpuIndexConfig * >(argp18);
+      arg18 = *temp;
+      if (SWIG_IsNewObj(res18)) delete temp;
+    }
+  }
+  {
+    Py_BEGIN_ALLOW_THREADS
+    try {
+      result = (faiss::gpu::GpuIndexHQ *)new faiss::gpu::GpuIndexHQ(arg1,arg2,arg3,arg4,arg5,arg6,arg7,arg8,arg9,(float const *)arg10,(float const *)arg11,(float const *)arg12,(unsigned char const *)arg13,(unsigned char const *)arg14,(faiss::Index::idx_t const *)arg15,(int const *)arg16,(float const *)arg17,arg18);
+    } catch(faiss::FaissException & e) {
+      PyEval_RestoreThread(_save);
+      PyErr_SetString(PyExc_RuntimeError, e.what());
+      SWIG_fail;
+    }
+    Py_END_ALLOW_THREADS
+  }
+  resultobj = SWIG_NewPointerObj(SWIG_as_voidptr(result), SWIGTYPE_p_faiss__gpu__GpuIndexHQ, SWIG_POINTER_NEW |  0 );
+  return resultobj;
+fail:
+  return NULL;
+}
+
+
+SWIGINTERN PyObject *_wrap_new_GpuIndexHQ__SWIG_1(PyObject *SWIGUNUSEDPARM(self), PyObject *args) {
+  PyObject *resultobj = 0;
+  faiss::gpu::GpuResources *arg1 = (faiss::gpu::GpuResources *) 0 ;
+  int arg2 ;
+  faiss::MetricType arg3 ;
+  int arg4 ;
+  unsigned long long arg5 ;
+  int arg6 ;
+  int arg7 ;
+  int arg8 ;
+  int arg9 ;
+  float *arg10 = (float *) 0 ;
+  float *arg11 = (float *) 0 ;
+  float *arg12 = (float *) 0 ;
+  unsigned char *arg13 = (unsigned char *) 0 ;
+  unsigned char *arg14 = (unsigned char *) 0 ;
+  faiss::Index::idx_t *arg15 = (faiss::Index::idx_t *) 0 ;
+  int *arg16 = (int *) 0 ;
+  float *arg17 = (float *) 0 ;
+  void *argp1 = 0 ;
+  int res1 = 0 ;
+  int val2 ;
+  int ecode2 = 0 ;
+  int val3 ;
+  int ecode3 = 0 ;
+  int val4 ;
+  int ecode4 = 0 ;
+  unsigned long long val5 ;
+  int ecode5 = 0 ;
+  int val6 ;
+  int ecode6 = 0 ;
+  int val7 ;
+  int ecode7 = 0 ;
+  int val8 ;
+  int ecode8 = 0 ;
+  int val9 ;
+  int ecode9 = 0 ;
+  void *argp10 = 0 ;
+  int res10 = 0 ;
+  void *argp11 = 0 ;
+  int res11 = 0 ;
+  void *argp12 = 0 ;
+  int res12 = 0 ;
+  void *argp13 = 0 ;
+  int res13 = 0 ;
+  void *argp14 = 0 ;
+  int res14 = 0 ;
+  void *argp15 = 0 ;
+  int res15 = 0 ;
+  void *argp16 = 0 ;
+  int res16 = 0 ;
+  void *argp17 = 0 ;
   int res17 = 0 ;
   PyObject * obj0 = 0 ;
   PyObject * obj1 = 0 ;
@@ -69540,190 +69733,15 @@ SWIGINTERN PyObject *_wrap_new_GpuIndexHQ__SWIG_0(PyObject *SWIGUNUSEDPARM(self)
     SWIG_exception_fail(SWIG_ArgError(res16), "in method '" "new_GpuIndexHQ" "', argument " "16"" of type '" "int const *""'"); 
   }
   arg16 = reinterpret_cast< int * >(argp16);
-  {
-    res17 = SWIG_ConvertPtr(obj16, &argp17, SWIGTYPE_p_faiss__gpu__GpuIndexConfig,  0  | 0);
-    if (!SWIG_IsOK(res17)) {
-      SWIG_exception_fail(SWIG_ArgError(res17), "in method '" "new_GpuIndexHQ" "', argument " "17"" of type '" "faiss::gpu::GpuIndexConfig""'"); 
-    }  
-    if (!argp17) {
-      SWIG_exception_fail(SWIG_ValueError, "invalid null reference " "in method '" "new_GpuIndexHQ" "', argument " "17"" of type '" "faiss::gpu::GpuIndexConfig""'");
-    } else {
-      faiss::gpu::GpuIndexConfig * temp = reinterpret_cast< faiss::gpu::GpuIndexConfig * >(argp17);
-      arg17 = *temp;
-      if (SWIG_IsNewObj(res17)) delete temp;
-    }
+  res17 = SWIG_ConvertPtr(obj16, &argp17,SWIGTYPE_p_float, 0 |  0 );
+  if (!SWIG_IsOK(res17)) {
+    SWIG_exception_fail(SWIG_ArgError(res17), "in method '" "new_GpuIndexHQ" "', argument " "17"" of type '" "float const *""'"); 
   }
+  arg17 = reinterpret_cast< float * >(argp17);
   {
     Py_BEGIN_ALLOW_THREADS
     try {
-      result = (faiss::gpu::GpuIndexHQ *)new faiss::gpu::GpuIndexHQ(arg1,arg2,arg3,arg4,arg5,arg6,arg7,arg8,arg9,(float const *)arg10,(float const *)arg11,(float const *)arg12,(unsigned char const *)arg13,(unsigned char const *)arg14,(faiss::Index::idx_t const *)arg15,(int const *)arg16,arg17);
-    } catch(faiss::FaissException & e) {
-      PyEval_RestoreThread(_save);
-      PyErr_SetString(PyExc_RuntimeError, e.what());
-      SWIG_fail;
-    }
-    Py_END_ALLOW_THREADS
-  }
-  resultobj = SWIG_NewPointerObj(SWIG_as_voidptr(result), SWIGTYPE_p_faiss__gpu__GpuIndexHQ, SWIG_POINTER_NEW |  0 );
-  return resultobj;
-fail:
-  return NULL;
-}
-
-
-SWIGINTERN PyObject *_wrap_new_GpuIndexHQ__SWIG_1(PyObject *SWIGUNUSEDPARM(self), PyObject *args) {
-  PyObject *resultobj = 0;
-  faiss::gpu::GpuResources *arg1 = (faiss::gpu::GpuResources *) 0 ;
-  int arg2 ;
-  faiss::MetricType arg3 ;
-  int arg4 ;
-  unsigned long long arg5 ;
-  int arg6 ;
-  int arg7 ;
-  int arg8 ;
-  int arg9 ;
-  float *arg10 = (float *) 0 ;
-  float *arg11 = (float *) 0 ;
-  float *arg12 = (float *) 0 ;
-  unsigned char *arg13 = (unsigned char *) 0 ;
-  unsigned char *arg14 = (unsigned char *) 0 ;
-  faiss::Index::idx_t *arg15 = (faiss::Index::idx_t *) 0 ;
-  int *arg16 = (int *) 0 ;
-  void *argp1 = 0 ;
-  int res1 = 0 ;
-  int val2 ;
-  int ecode2 = 0 ;
-  int val3 ;
-  int ecode3 = 0 ;
-  int val4 ;
-  int ecode4 = 0 ;
-  unsigned long long val5 ;
-  int ecode5 = 0 ;
-  int val6 ;
-  int ecode6 = 0 ;
-  int val7 ;
-  int ecode7 = 0 ;
-  int val8 ;
-  int ecode8 = 0 ;
-  int val9 ;
-  int ecode9 = 0 ;
-  void *argp10 = 0 ;
-  int res10 = 0 ;
-  void *argp11 = 0 ;
-  int res11 = 0 ;
-  void *argp12 = 0 ;
-  int res12 = 0 ;
-  void *argp13 = 0 ;
-  int res13 = 0 ;
-  void *argp14 = 0 ;
-  int res14 = 0 ;
-  void *argp15 = 0 ;
-  int res15 = 0 ;
-  void *argp16 = 0 ;
-  int res16 = 0 ;
-  PyObject * obj0 = 0 ;
-  PyObject * obj1 = 0 ;
-  PyObject * obj2 = 0 ;
-  PyObject * obj3 = 0 ;
-  PyObject * obj4 = 0 ;
-  PyObject * obj5 = 0 ;
-  PyObject * obj6 = 0 ;
-  PyObject * obj7 = 0 ;
-  PyObject * obj8 = 0 ;
-  PyObject * obj9 = 0 ;
-  PyObject * obj10 = 0 ;
-  PyObject * obj11 = 0 ;
-  PyObject * obj12 = 0 ;
-  PyObject * obj13 = 0 ;
-  PyObject * obj14 = 0 ;
-  PyObject * obj15 = 0 ;
-  faiss::gpu::GpuIndexHQ *result = 0 ;
-  
-  if (!PyArg_ParseTuple(args,(char *)"OOOOOOOOOOOOOOOO:new_GpuIndexHQ",&obj0,&obj1,&obj2,&obj3,&obj4,&obj5,&obj6,&obj7,&obj8,&obj9,&obj10,&obj11,&obj12,&obj13,&obj14,&obj15)) SWIG_fail;
-  res1 = SWIG_ConvertPtr(obj0, &argp1,SWIGTYPE_p_faiss__gpu__GpuResources, 0 |  0 );
-  if (!SWIG_IsOK(res1)) {
-    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "new_GpuIndexHQ" "', argument " "1"" of type '" "faiss::gpu::GpuResources *""'"); 
-  }
-  arg1 = reinterpret_cast< faiss::gpu::GpuResources * >(argp1);
-  ecode2 = SWIG_AsVal_int(obj1, &val2);
-  if (!SWIG_IsOK(ecode2)) {
-    SWIG_exception_fail(SWIG_ArgError(ecode2), "in method '" "new_GpuIndexHQ" "', argument " "2"" of type '" "int""'");
-  } 
-  arg2 = static_cast< int >(val2);
-  ecode3 = SWIG_AsVal_int(obj2, &val3);
-  if (!SWIG_IsOK(ecode3)) {
-    SWIG_exception_fail(SWIG_ArgError(ecode3), "in method '" "new_GpuIndexHQ" "', argument " "3"" of type '" "faiss::MetricType""'");
-  } 
-  arg3 = static_cast< faiss::MetricType >(val3);
-  ecode4 = SWIG_AsVal_int(obj3, &val4);
-  if (!SWIG_IsOK(ecode4)) {
-    SWIG_exception_fail(SWIG_ArgError(ecode4), "in method '" "new_GpuIndexHQ" "', argument " "4"" of type '" "int""'");
-  } 
-  arg4 = static_cast< int >(val4);
-  ecode5 = SWIG_AsVal_unsigned_SS_long_SS_long(obj4, &val5);
-  if (!SWIG_IsOK(ecode5)) {
-    SWIG_exception_fail(SWIG_ArgError(ecode5), "in method '" "new_GpuIndexHQ" "', argument " "5"" of type '" "unsigned long long""'");
-  } 
-  arg5 = static_cast< unsigned long long >(val5);
-  ecode6 = SWIG_AsVal_int(obj5, &val6);
-  if (!SWIG_IsOK(ecode6)) {
-    SWIG_exception_fail(SWIG_ArgError(ecode6), "in method '" "new_GpuIndexHQ" "', argument " "6"" of type '" "int""'");
-  } 
-  arg6 = static_cast< int >(val6);
-  ecode7 = SWIG_AsVal_int(obj6, &val7);
-  if (!SWIG_IsOK(ecode7)) {
-    SWIG_exception_fail(SWIG_ArgError(ecode7), "in method '" "new_GpuIndexHQ" "', argument " "7"" of type '" "int""'");
-  } 
-  arg7 = static_cast< int >(val7);
-  ecode8 = SWIG_AsVal_int(obj7, &val8);
-  if (!SWIG_IsOK(ecode8)) {
-    SWIG_exception_fail(SWIG_ArgError(ecode8), "in method '" "new_GpuIndexHQ" "', argument " "8"" of type '" "int""'");
-  } 
-  arg8 = static_cast< int >(val8);
-  ecode9 = SWIG_AsVal_int(obj8, &val9);
-  if (!SWIG_IsOK(ecode9)) {
-    SWIG_exception_fail(SWIG_ArgError(ecode9), "in method '" "new_GpuIndexHQ" "', argument " "9"" of type '" "int""'");
-  } 
-  arg9 = static_cast< int >(val9);
-  res10 = SWIG_ConvertPtr(obj9, &argp10,SWIGTYPE_p_float, 0 |  0 );
-  if (!SWIG_IsOK(res10)) {
-    SWIG_exception_fail(SWIG_ArgError(res10), "in method '" "new_GpuIndexHQ" "', argument " "10"" of type '" "float const *""'"); 
-  }
-  arg10 = reinterpret_cast< float * >(argp10);
-  res11 = SWIG_ConvertPtr(obj10, &argp11,SWIGTYPE_p_float, 0 |  0 );
-  if (!SWIG_IsOK(res11)) {
-    SWIG_exception_fail(SWIG_ArgError(res11), "in method '" "new_GpuIndexHQ" "', argument " "11"" of type '" "float const *""'"); 
-  }
-  arg11 = reinterpret_cast< float * >(argp11);
-  res12 = SWIG_ConvertPtr(obj11, &argp12,SWIGTYPE_p_float, 0 |  0 );
-  if (!SWIG_IsOK(res12)) {
-    SWIG_exception_fail(SWIG_ArgError(res12), "in method '" "new_GpuIndexHQ" "', argument " "12"" of type '" "float const *""'"); 
-  }
-  arg12 = reinterpret_cast< float * >(argp12);
-  res13 = SWIG_ConvertPtr(obj12, &argp13,SWIGTYPE_p_unsigned_char, 0 |  0 );
-  if (!SWIG_IsOK(res13)) {
-    SWIG_exception_fail(SWIG_ArgError(res13), "in method '" "new_GpuIndexHQ" "', argument " "13"" of type '" "unsigned char const *""'"); 
-  }
-  arg13 = reinterpret_cast< unsigned char * >(argp13);
-  res14 = SWIG_ConvertPtr(obj13, &argp14,SWIGTYPE_p_unsigned_char, 0 |  0 );
-  if (!SWIG_IsOK(res14)) {
-    SWIG_exception_fail(SWIG_ArgError(res14), "in method '" "new_GpuIndexHQ" "', argument " "14"" of type '" "unsigned char const *""'"); 
-  }
-  arg14 = reinterpret_cast< unsigned char * >(argp14);
-  res15 = SWIG_ConvertPtr(obj14, &argp15,SWIGTYPE_p_long, 0 |  0 );
-  if (!SWIG_IsOK(res15)) {
-    SWIG_exception_fail(SWIG_ArgError(res15), "in method '" "new_GpuIndexHQ" "', argument " "15"" of type '" "faiss::Index::idx_t const *""'"); 
-  }
-  arg15 = reinterpret_cast< faiss::Index::idx_t * >(argp15);
-  res16 = SWIG_ConvertPtr(obj15, &argp16,SWIGTYPE_p_int, 0 |  0 );
-  if (!SWIG_IsOK(res16)) {
-    SWIG_exception_fail(SWIG_ArgError(res16), "in method '" "new_GpuIndexHQ" "', argument " "16"" of type '" "int const *""'"); 
-  }
-  arg16 = reinterpret_cast< int * >(argp16);
-  {
-    Py_BEGIN_ALLOW_THREADS
-    try {
-      result = (faiss::gpu::GpuIndexHQ *)new faiss::gpu::GpuIndexHQ(arg1,arg2,arg3,arg4,arg5,arg6,arg7,arg8,arg9,(float const *)arg10,(float const *)arg11,(float const *)arg12,(unsigned char const *)arg13,(unsigned char const *)arg14,(faiss::Index::idx_t const *)arg15,(int const *)arg16);
+      result = (faiss::gpu::GpuIndexHQ *)new faiss::gpu::GpuIndexHQ(arg1,arg2,arg3,arg4,arg5,arg6,arg7,arg8,arg9,(float const *)arg10,(float const *)arg11,(float const *)arg12,(unsigned char const *)arg13,(unsigned char const *)arg14,(faiss::Index::idx_t const *)arg15,(int const *)arg16,(float const *)arg17);
     } catch(faiss::FaissException & e) {
       PyEval_RestoreThread(_save);
       PyErr_SetString(PyExc_RuntimeError, e.what());
@@ -69740,107 +69758,15 @@ fail:
 
 SWIGINTERN PyObject *_wrap_new_GpuIndexHQ(PyObject *self, PyObject *args) {
   Py_ssize_t argc;
-  PyObject *argv[18] = {
+  PyObject *argv[19] = {
     0
   };
   Py_ssize_t ii;
   
   if (!PyTuple_Check(args)) SWIG_fail;
   argc = args ? PyObject_Length(args) : 0;
-  for (ii = 0; (ii < 17) && (ii < argc); ii++) {
+  for (ii = 0; (ii < 18) && (ii < argc); ii++) {
     argv[ii] = PyTuple_GET_ITEM(args,ii);
-  }
-  if (argc == 16) {
-    int _v;
-    void *vptr = 0;
-    int res = SWIG_ConvertPtr(argv[0], &vptr, SWIGTYPE_p_faiss__gpu__GpuResources, 0);
-    _v = SWIG_CheckState(res);
-    if (_v) {
-      {
-        int res = SWIG_AsVal_int(argv[1], NULL);
-        _v = SWIG_CheckState(res);
-      }
-      if (_v) {
-        {
-          int res = SWIG_AsVal_int(argv[2], NULL);
-          _v = SWIG_CheckState(res);
-        }
-        if (_v) {
-          {
-            int res = SWIG_AsVal_int(argv[3], NULL);
-            _v = SWIG_CheckState(res);
-          }
-          if (_v) {
-            {
-              int res = SWIG_AsVal_unsigned_SS_long_SS_long(argv[4], NULL);
-              _v = SWIG_CheckState(res);
-            }
-            if (_v) {
-              {
-                int res = SWIG_AsVal_int(argv[5], NULL);
-                _v = SWIG_CheckState(res);
-              }
-              if (_v) {
-                {
-                  int res = SWIG_AsVal_int(argv[6], NULL);
-                  _v = SWIG_CheckState(res);
-                }
-                if (_v) {
-                  {
-                    int res = SWIG_AsVal_int(argv[7], NULL);
-                    _v = SWIG_CheckState(res);
-                  }
-                  if (_v) {
-                    {
-                      int res = SWIG_AsVal_int(argv[8], NULL);
-                      _v = SWIG_CheckState(res);
-                    }
-                    if (_v) {
-                      void *vptr = 0;
-                      int res = SWIG_ConvertPtr(argv[9], &vptr, SWIGTYPE_p_float, 0);
-                      _v = SWIG_CheckState(res);
-                      if (_v) {
-                        void *vptr = 0;
-                        int res = SWIG_ConvertPtr(argv[10], &vptr, SWIGTYPE_p_float, 0);
-                        _v = SWIG_CheckState(res);
-                        if (_v) {
-                          void *vptr = 0;
-                          int res = SWIG_ConvertPtr(argv[11], &vptr, SWIGTYPE_p_float, 0);
-                          _v = SWIG_CheckState(res);
-                          if (_v) {
-                            void *vptr = 0;
-                            int res = SWIG_ConvertPtr(argv[12], &vptr, SWIGTYPE_p_unsigned_char, 0);
-                            _v = SWIG_CheckState(res);
-                            if (_v) {
-                              void *vptr = 0;
-                              int res = SWIG_ConvertPtr(argv[13], &vptr, SWIGTYPE_p_unsigned_char, 0);
-                              _v = SWIG_CheckState(res);
-                              if (_v) {
-                                void *vptr = 0;
-                                int res = SWIG_ConvertPtr(argv[14], &vptr, SWIGTYPE_p_long, 0);
-                                _v = SWIG_CheckState(res);
-                                if (_v) {
-                                  void *vptr = 0;
-                                  int res = SWIG_ConvertPtr(argv[15], &vptr, SWIGTYPE_p_int, 0);
-                                  _v = SWIG_CheckState(res);
-                                  if (_v) {
-                                    return _wrap_new_GpuIndexHQ__SWIG_1(self, args);
-                                  }
-                                }
-                              }
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    }
   }
   if (argc == 17) {
     int _v;
@@ -69916,10 +69842,112 @@ SWIGINTERN PyObject *_wrap_new_GpuIndexHQ(PyObject *self, PyObject *args) {
                                   int res = SWIG_ConvertPtr(argv[15], &vptr, SWIGTYPE_p_int, 0);
                                   _v = SWIG_CheckState(res);
                                   if (_v) {
-                                    int res = SWIG_ConvertPtr(argv[16], 0, SWIGTYPE_p_faiss__gpu__GpuIndexConfig, 0);
+                                    void *vptr = 0;
+                                    int res = SWIG_ConvertPtr(argv[16], &vptr, SWIGTYPE_p_float, 0);
                                     _v = SWIG_CheckState(res);
                                     if (_v) {
-                                      return _wrap_new_GpuIndexHQ__SWIG_0(self, args);
+                                      return _wrap_new_GpuIndexHQ__SWIG_1(self, args);
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  if (argc == 18) {
+    int _v;
+    void *vptr = 0;
+    int res = SWIG_ConvertPtr(argv[0], &vptr, SWIGTYPE_p_faiss__gpu__GpuResources, 0);
+    _v = SWIG_CheckState(res);
+    if (_v) {
+      {
+        int res = SWIG_AsVal_int(argv[1], NULL);
+        _v = SWIG_CheckState(res);
+      }
+      if (_v) {
+        {
+          int res = SWIG_AsVal_int(argv[2], NULL);
+          _v = SWIG_CheckState(res);
+        }
+        if (_v) {
+          {
+            int res = SWIG_AsVal_int(argv[3], NULL);
+            _v = SWIG_CheckState(res);
+          }
+          if (_v) {
+            {
+              int res = SWIG_AsVal_unsigned_SS_long_SS_long(argv[4], NULL);
+              _v = SWIG_CheckState(res);
+            }
+            if (_v) {
+              {
+                int res = SWIG_AsVal_int(argv[5], NULL);
+                _v = SWIG_CheckState(res);
+              }
+              if (_v) {
+                {
+                  int res = SWIG_AsVal_int(argv[6], NULL);
+                  _v = SWIG_CheckState(res);
+                }
+                if (_v) {
+                  {
+                    int res = SWIG_AsVal_int(argv[7], NULL);
+                    _v = SWIG_CheckState(res);
+                  }
+                  if (_v) {
+                    {
+                      int res = SWIG_AsVal_int(argv[8], NULL);
+                      _v = SWIG_CheckState(res);
+                    }
+                    if (_v) {
+                      void *vptr = 0;
+                      int res = SWIG_ConvertPtr(argv[9], &vptr, SWIGTYPE_p_float, 0);
+                      _v = SWIG_CheckState(res);
+                      if (_v) {
+                        void *vptr = 0;
+                        int res = SWIG_ConvertPtr(argv[10], &vptr, SWIGTYPE_p_float, 0);
+                        _v = SWIG_CheckState(res);
+                        if (_v) {
+                          void *vptr = 0;
+                          int res = SWIG_ConvertPtr(argv[11], &vptr, SWIGTYPE_p_float, 0);
+                          _v = SWIG_CheckState(res);
+                          if (_v) {
+                            void *vptr = 0;
+                            int res = SWIG_ConvertPtr(argv[12], &vptr, SWIGTYPE_p_unsigned_char, 0);
+                            _v = SWIG_CheckState(res);
+                            if (_v) {
+                              void *vptr = 0;
+                              int res = SWIG_ConvertPtr(argv[13], &vptr, SWIGTYPE_p_unsigned_char, 0);
+                              _v = SWIG_CheckState(res);
+                              if (_v) {
+                                void *vptr = 0;
+                                int res = SWIG_ConvertPtr(argv[14], &vptr, SWIGTYPE_p_long, 0);
+                                _v = SWIG_CheckState(res);
+                                if (_v) {
+                                  void *vptr = 0;
+                                  int res = SWIG_ConvertPtr(argv[15], &vptr, SWIGTYPE_p_int, 0);
+                                  _v = SWIG_CheckState(res);
+                                  if (_v) {
+                                    void *vptr = 0;
+                                    int res = SWIG_ConvertPtr(argv[16], &vptr, SWIGTYPE_p_float, 0);
+                                    _v = SWIG_CheckState(res);
+                                    if (_v) {
+                                      int res = SWIG_ConvertPtr(argv[17], 0, SWIGTYPE_p_faiss__gpu__GpuIndexConfig, 0);
+                                      _v = SWIG_CheckState(res);
+                                      if (_v) {
+                                        return _wrap_new_GpuIndexHQ__SWIG_0(self, args);
+                                      }
                                     }
                                   }
                                 }
@@ -69942,8 +69970,8 @@ SWIGINTERN PyObject *_wrap_new_GpuIndexHQ(PyObject *self, PyObject *args) {
 fail:
   SWIG_SetErrorMsg(PyExc_NotImplementedError,"Wrong number or type of arguments for overloaded function 'new_GpuIndexHQ'.\n"
     "  Possible C/C++ prototypes are:\n"
-    "    faiss::gpu::GpuIndexHQ::GpuIndexHQ(faiss::gpu::GpuResources *,int,faiss::MetricType,int,unsigned long long,int,int,int,int,float const *,float const *,float const *,unsigned char const *,unsigned char const *,faiss::Index::idx_t const *,int const *,faiss::gpu::GpuIndexConfig)\n"
-    "    faiss::gpu::GpuIndexHQ::GpuIndexHQ(faiss::gpu::GpuResources *,int,faiss::MetricType,int,unsigned long long,int,int,int,int,float const *,float const *,float const *,unsigned char const *,unsigned char const *,faiss::Index::idx_t const *,int const *)\n");
+    "    faiss::gpu::GpuIndexHQ::GpuIndexHQ(faiss::gpu::GpuResources *,int,faiss::MetricType,int,unsigned long long,int,int,int,int,float const *,float const *,float const *,unsigned char const *,unsigned char const *,faiss::Index::idx_t const *,int const *,float const *,faiss::gpu::GpuIndexConfig)\n"
+    "    faiss::gpu::GpuIndexHQ::GpuIndexHQ(faiss::gpu::GpuResources *,int,faiss::MetricType,int,unsigned long long,int,int,int,int,float const *,float const *,float const *,unsigned char const *,unsigned char const *,faiss::Index::idx_t const *,int const *,float const *)\n");
   return 0;
 }
 
