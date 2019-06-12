@@ -24,6 +24,9 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform_scan.h>
 
+#include "../utils/HostTensor.cuh"
+#include "../utils/CopyUtils.cuh"
+
 namespace faiss { namespace gpu {
 
 template <typename ListIdT = unsigned long long>
@@ -290,6 +293,19 @@ void runHQSecondStage(const Tensor<int, 3, true>& deviceIMIIndices,
                      deviceListIds,
                      stream);
 
+    // TODO: debug only
+    HostTensor<ListIdT, 2, true> listIds({numQueries, numListsPerQuery});
+    fromDevice<ListIdT, 2>(deviceListIds, listIds.data(), stream);
+    cudaDeviceSynchronize();
+    printf("====== listIds ======\n");
+    for (int qid = 0; qid < numQueries; ++qid) {
+        for (int i = 0; i < numListsPerQuery; ++i) {
+            printf("%lu ", (ListIdT)listIds[qid][i]);
+        }
+        printf("\n");
+    }
+    printf("=====================\n");
+
     DeviceTensor<int, 1, true> devicePrefixSumOffsetsData(mem, {numQueries * numListsPerQuery + 1}, stream);
     cudaMemsetAsync(devicePrefixSumOffsetsData.data(), 0, sizeof(int), stream);
     runHQCalcListOffsets(deviceListLengths,
@@ -298,10 +314,24 @@ void runHQSecondStage(const Tensor<int, 3, true>& deviceIMIIndices,
                          resources,
                          stream);
     Tensor<int, 2, true> devicePrefixSumOffsets(devicePrefixSumOffsetsData.data(), {numQueries, numListsPerQuery});
+    
+    // TODO: debug only
+    HostTensor<int, 2, true> prefixSumOffsets({numQueries, numListsPerQuery});
+    fromDevice<int, 2>(devicePrefixSumOffsets, prefixSumOffsets.data(), stream);
+    cudaDeviceSynchronize();
+    printf("====== prefixSumOffsets ======\n");
+    for (int qid = 0; qid < numQueries; ++qid) {
+        for (int i = 0; i < numListsPerQuery; ++i) {
+            printf("%d ", (int)prefixSumOffsets[qid][i]);
+        }
+        printf("\n");
+    }
+    printf("==============================\n");
 
     int numItemsSelected;
     cudaDeviceSynchronize();
     cudaMemcpy(&numItemsSelected, &devicePrefixSumOffsetsData[numQueries * numListsPerQuery], sizeof(int), cudaMemcpyDeviceToHost);
+    printf("numItemsSelected: %d\n", numItemsSelected);
     DeviceTensor<float, 1, true> deviceDistancesFlat(mem, {numItemsSelected}, stream);
 
     runHQSecondStageDistances(deviceListIds,
@@ -342,6 +372,19 @@ void runHQSecondStage(const Tensor<int, 3, true>& deviceIMIIndices,
                            chooseLargest,
                            deviceOutIndices,
                            stream);
+
+    // TODO: debug only
+    HostTensor<int, 3, true> outIndices({3, numQueries, k});
+    fromDevice<int, 3>(deviceOutIndices, outIndices.data(), stream);
+    cudaDeviceSynchronize();
+    printf("=============\n");
+    for (int qid = 0; qid < numQueries; ++qid) {
+        for (int rank = 0; rank < k; ++rank) {
+            printf("(%d, %d, %d) ", (int)outIndices[0][qid][rank], (int)outIndices[1][qid][rank], (int)outIndices[2][qid][rank]);
+        }
+        printf("\n");
+    }
+    printf("=============\n");
 }
 
 } } // namespace

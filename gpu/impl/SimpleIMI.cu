@@ -12,6 +12,9 @@
 #include "SimpleIMICut.cuh"
 #include "../utils/DeviceTensor.cuh"
 
+#include "../utils/HostTensor.cuh"
+#include "../utils/CopyUtils.cuh"
+
 namespace faiss { namespace gpu {
 
 void SimpleIMI::query(const Tensor<float, 2, true>& deviceQueries,
@@ -44,9 +47,35 @@ void SimpleIMI::query(const Tensor<float, 2, true>& deviceQueries,
                       nprobeSideLen,
                       deviceOutDistancesView,
                       deviceOutIndicesView);
+
+        // TODO: debug only
+        HostTensor<float, 2, true> outDistancesView({deviceQueries.getSize(0), nprobeSideLen});
+        fromDevice<float, 2>(deviceOutDistancesView, outDistancesView.data(), stream);
+        cudaDeviceSynchronize();
+        printf("======imiId=%d======\n", imiId);
+        for (int qid = 0; qid < deviceQueries.getSize(0); ++qid) {
+            for (int rank = 0; rank < nprobeSideLen; ++rank) {
+                printf("%f ", (float)outDistancesView[qid][rank]);
+            }
+            printf("\n");
+        }
+        printf("===================\n");
     }
 
     runSimpleIMICut(deviceOutDistances, deviceOutUpperBounds, nprobeSquareLen, nprobeSideLen, stream);
+
+    // TODO: debug only
+    HostTensor<int, 2, true> outUpperBounds({2, deviceQueries.getSize(0)});
+    fromDevice<int, 2>(deviceOutUpperBounds, outUpperBounds.data(), stream);
+    cudaDeviceSynchronize();
+    printf("======upper bounds======\n");
+    for (int imiId = 0; imiId < 2; ++imiId) {
+        for (int qid = 0; qid < deviceQueries.getSize(0); ++qid) {
+            printf("%d ", (int)outUpperBounds[imiId][qid]);
+        }
+        printf("\n");
+    }
+    printf("========================\n");
 }
 
 } } // namespace

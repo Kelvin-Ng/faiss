@@ -171,6 +171,27 @@ void HQ::query(const Tensor<float, 2, true>& deviceQueriesOrig, int imiNprobeSqu
     // TODO: handle inner product
     runComputeHQL2DistanceTable(deviceQueries, deviceIMIOutIndices, deviceIMIOutUpperBounds, deviceFineCentroids_, deviceDistanceTable, resources_);
 
+    // TODO: debug only
+    HostTensor<int, 2, true> imiOutUpperBounds({2, deviceQueries.getSize(0)});
+    fromDevice<int, 2>(deviceIMIOutUpperBounds, imiOutUpperBounds.data(), stream);
+    HostTensor<float, 4, true> distanceTable({2, deviceQueries.getSize(0), imiNprobeSideLen, deviceFineCentroids_.getSize(2)});
+    fromDevice<float, 4>(deviceDistanceTable, distanceTable.data(), stream);
+    cudaDeviceSynchronize();
+    printf("===== Distance Table =====\n");
+    for (int i = 0; i < 2; ++i) {
+        printf("---------i=%d---------\n", i);
+        for (int j = 0; j < deviceQueries.getSize(0); ++j) {
+            printf("---qid=%d---\n", j);
+            for (int k = 0; k < imiOutUpperBounds[i][j]; ++k) {
+                for (int l = 0; l < deviceFineCentroids_.getSize(2); ++l) {
+                    printf("%f ", (float)distanceTable[i][j][k][l]);
+                }
+                printf("\n");
+            }
+        }
+    }
+    printf("\n==========================\n");
+
     DeviceTensor<int, 3, true> deviceSecondStageIndices(mem, {3, deviceQueries.getSize(0), secondStageNProbe}, stream);
     runHQSecondStage(deviceIMIOutIndices,
                      deviceIMIOutUpperBounds,
