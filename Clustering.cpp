@@ -1,14 +1,14 @@
 /**
- * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD+Patents license found in the
+ * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
 
 // -*- c++ -*-
 
 #include "Clustering.h"
+#include "AuxIndexStructures.h"
 
 
 #include <cmath>
@@ -24,7 +24,9 @@ namespace faiss {
 ClusteringParameters::ClusteringParameters ():
     niter(25),
     nredo(1),
-    verbose(false), spherical(false),
+    verbose(false),
+    spherical(false),
+    int_centroids(false),
     update_index(false),
     frozen_centroids(false),
     min_points_per_centroid(39),
@@ -42,7 +44,7 @@ Clustering::Clustering (int d, int k, const ClusteringParameters &cp):
 
 
 
-static double imbalance_factor (int n, int k, long *assign) {
+static double imbalance_factor (int n, int k, int64_t *assign) {
     std::vector<int> hist(k, 0);
     for (int i = 0; i < n; i++)
         hist[assign[i]]++;
@@ -58,7 +60,18 @@ static double imbalance_factor (int n, int k, long *assign) {
     return uf;
 }
 
+void Clustering::post_process_centroids ()
+{
 
+    if (spherical) {
+        fvec_renorm_L2 (d, k, centroids.data());
+    }
+
+    if (int_centroids) {
+        for (size_t i = 0; i < centroids.size(); i++)
+            centroids[i] = roundf (centroids[i]);
+    }
+}
 
 
 void Clustering::train (idx_t nx, const float *x_in, Index & index) {
@@ -117,9 +130,6 @@ void Clustering::train (idx_t nx, const float *x_in, Index & index) {
                "redo %d times, %d iterations\n",
                int(nx), d, k, nredo, niter);
 
-
-
-
     idx_t * assign = new idx_t[nx];
     ScopeDeleter<idx_t> del (assign);
     float * dis = new float[nx];
@@ -146,7 +156,7 @@ void Clustering::train (idx_t nx, const float *x_in, Index & index) {
     double t_search_tot = 0;
     if (verbose) {
         printf("  Preprocessing in %.2f s\n",
-               (getmillisecs() - t0)/1000.);
+               (getmillisecs() - t0) / 1000.);
     }
     t0 = getmillisecs();
 
@@ -155,7 +165,6 @@ void Clustering::train (idx_t nx, const float *x_in, Index & index) {
         if (verbose && nredo > 1) {
             printf("Outer iteration %d / %d\n", redo, nredo);
         }
-
 
         // initialize remaining centroids with random points from the dataset
         centroids.resize (d * k);
@@ -166,9 +175,7 @@ void Clustering::train (idx_t nx, const float *x_in, Index & index) {
             memcpy (&centroids[i * d], x + perm[i] * d,
                     d * sizeof (float));
 
-        if (spherical) {
-            fvec_renorm_L2 (d, k, centroids.data());
-        }
+        post_process_centroids ();
 
         if (index.ntotal != 0) {
             index.reset();
@@ -183,6 +190,7 @@ void Clustering::train (idx_t nx, const float *x_in, Index & index) {
         for (int i = 0; i < niter; i++) {
             double t0s = getmillisecs();
             index.search (nx, x, 1, dis, assign);
+            InterruptCallback::check();
             t_search_tot += getmillisecs() - t0s;
 
             err = 0;
@@ -204,8 +212,7 @@ void Clustering::train (idx_t nx, const float *x_in, Index & index) {
                 fflush (stdout);
             }
 
-            if (spherical)
-                fvec_renorm_L2 (d, k, centroids.data());
+            post_process_centroids ();
 
             index.reset ();
             if (update_index)
@@ -213,6 +220,7 @@ void Clustering::train (idx_t nx, const float *x_in, Index & index) {
 
             assert (index.ntotal == 0);
             index.add (k, centroids.data());
+            InterruptCallback::check ();
         }
         if (verbose) printf("\n");
         if (nredo > 1) {

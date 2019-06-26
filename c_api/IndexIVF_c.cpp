@@ -1,8 +1,7 @@
 /**
- * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD+Patents license found in the
+ * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
 
@@ -49,8 +48,8 @@ int faiss_IndexIVF_merge_from(
 }
 
 int faiss_IndexIVF_copy_subset_to(
-    const FaissIndexIVF* index, FaissIndexIVF* other, int subset_type, long a1,
-    long a2) {
+    const FaissIndexIVF* index, FaissIndexIVF* other, int subset_type, idx_t a1,
+    idx_t a2) {
     try {
         reinterpret_cast<const IndexIVF*>(index)->copy_subset_to(
             *reinterpret_cast<IndexIVF*>(other), subset_type, a1, a2);
@@ -80,12 +79,12 @@ int faiss_IndexIVF_make_direct_map(FaissIndexIVF* index,
 }
 
 double faiss_IndexIVF_imbalance_factor (const FaissIndexIVF* index) {
-    return reinterpret_cast<const IndexIVF*>(index)->imbalance_factor();
+    return reinterpret_cast<const IndexIVF*>(index)->invlists->imbalance_factor();
 }
 
 /// display some stats about the inverted lists
 void faiss_IndexIVF_print_stats (const FaissIndexIVF* index) {
-    reinterpret_cast<const IndexIVF*>(index)->print_stats();
+    reinterpret_cast<const IndexIVF*>(index)->invlists->print_stats();
 }
 
 void faiss_IndexIVFStats_reset(FaissIndexIVFStats* stats) {

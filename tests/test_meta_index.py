@@ -1,7 +1,6 @@
-# Copyright (c) 2015-present, Facebook, Inc.
-# All rights reserved.
+# Copyright (c) Facebook, Inc. and its affiliates.
 #
-# This source code is licensed under the BSD+Patents license found in the
+# This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
 #! /usr/bin/env python2
@@ -43,8 +42,6 @@ class IDRemap(unittest.TestCase):
         index2.train(xt)
         index2.add_with_ids(xb, ids)
 
-        # false = do not add 1 to the returned ids (this is done by
-        # default to accommodate lua indexing)
         _D, I = index2.search(xq, k)
 
         assert np.all(I == nb - 1 - Iref)

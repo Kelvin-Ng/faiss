@@ -70,9 +70,9 @@ GpuIndexHQ::GpuIndexHQ(GpuResources* resources,
 }
 
 void
-GpuIndexHQ::searchImpl_(faiss::Index::idx_t n,
+GpuIndexHQ::searchImpl_(int n,
                         const float* x,
-                        faiss::Index::idx_t k,
+                        int k,
                         float* distances,
                         faiss::Index::idx_t* labels) const {
   // Device is already set in GpuIndex::search

@@ -1,8 +1,7 @@
 /**
- * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD+Patents license found in the
+ * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
 
@@ -44,7 +43,7 @@ struct IndexBinaryFlat : IndexBinary {
   /** Remove some ids. Note that because of the indexing structure,
    * the semantics of this operation are different from the usual ones:
    * the new ids are shifted. */
-  long remove_ids(const IDSelector& sel) override;
+  size_t remove_ids(const IDSelector& sel) override;
 
   IndexBinaryFlat() {}
 };

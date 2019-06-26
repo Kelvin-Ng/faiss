@@ -1,8 +1,7 @@
 /**
- * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD+Patents license found in the
+ * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
 
@@ -222,6 +221,7 @@ void RandomRotationMatrix::init (int seed)
         float_randn(q, d_out * d_in, seed);
         matrix_qr(d_in, d_out, q);
     } else {
+        // use tight-frame transformation
         A.resize (d_out * d_out);
         float *q = A.data();
         float_randn(q, d_out * d_out, seed);
@@ -239,7 +239,7 @@ void RandomRotationMatrix::init (int seed)
     is_trained = true;
 }
 
-void RandomRotationMatrix::train (Index::idx_t n, const float *x)
+void RandomRotationMatrix::train (Index::idx_t /*n*/, const float */*x*/)
 {
     // initialize with some arbitrary seed
     init (12345);
@@ -671,11 +671,11 @@ void OPQMatrix::train (Index::idx_t n, const float *x)
         xproj (d2 * n), pq_recons (d2 * n), xxr (d * n),
         tmp(d * d * 4);
 
-    std::vector<uint8_t> codes (M * n);
 
     ProductQuantizer pq_default (d2, M, 8);
-    ProductQuantizer &pq_regular =
-        pq ? *pq : pq_default;
+    ProductQuantizer &pq_regular = pq ? *pq : pq_default;
+    std::vector<uint8_t> codes (pq_regular.code_size * n);
+
     double t0 = getmillisecs();
     for (int iter = 0; iter < niter; iter++) {
 
@@ -691,10 +691,18 @@ void OPQMatrix::train (Index::idx_t n, const float *x)
 
         pq_regular.cp.max_points_per_centroid = 1000;
         pq_regular.cp.niter = iter == 0 ? niter_pq_0 : niter_pq;
-        pq_regular.cp.verbose = verbose;
+        pq_regular.verbose = verbose;
         pq_regular.train (n, xproj.data());
 
-        pq_regular.compute_codes (xproj.data(), codes.data(), n);
+        if (verbose) {
+            printf("    encode / decode\n");
+        }
+        if (pq_regular.assign_index) {
+            pq_regular.compute_codes_with_assign_index
+                (xproj.data(), codes.data(), n);
+        } else {
+            pq_regular.compute_codes (xproj.data(), codes.data(), n);
+        }
         pq_regular.decode (codes.data(), pq_recons.data(), n);
 
         float pq_err = fvec_L2sqr (pq_recons.data(), xproj.data(), n * d2) / n;
@@ -710,6 +718,9 @@ void OPQMatrix::train (Index::idx_t n, const float *x)
             FINTEGER di = d, d2i = d2, ni = n;
             float one = 1, zero = 0;
 
+            if (verbose) {
+                printf("    X * recons\n");
+            }
             // torch.mm(xtrain:t(), pq_recons)
             sgemm_ ("Not", "Transposed",
                     &d2i, &di, &ni,
@@ -789,6 +800,58 @@ void NormalizationTransform::reverse_transform (idx_t n, const float* xt,
 }
 
 /*********************************************
+ * CenteringTransform
+ *********************************************/
+
+CenteringTransform::CenteringTransform (int d):
+    VectorTransform (d, d)
+{
+    is_trained = false;
+}
+
+void CenteringTransform::train(Index::idx_t n, const float *x) {
+    FAISS_THROW_IF_NOT_MSG(n > 0, "need at least one training vector");
+    mean.resize (d_in, 0);
+    for (idx_t i = 0; i < n; i++) {
+        for (size_t j = 0; j < d_in; j++) {
+            mean[j] += *x++;
+        }
+    }
+
+    for (size_t j = 0; j < d_in; j++) {
+        mean[j] /= n;
+    }
+    is_trained = true;
+}
+
+
+void CenteringTransform::apply_noalloc
+      (idx_t n, const float* x, float* xt) const
+{
+    FAISS_THROW_IF_NOT (is_trained);
+
+    for (idx_t i = 0; i < n; i++) {
+        for (size_t j = 0; j < d_in; j++) {
+            *xt++ = *x++ - mean[j];
+        }
+    }
+}
+
+void CenteringTransform::reverse_transform (idx_t n, const float* xt,
+                                                float* x) const
+{
+    FAISS_THROW_IF_NOT (is_trained);
+
+    for (idx_t i = 0; i < n; i++) {
+        for (size_t j = 0; j < d_in; j++) {
+            *x++ = *xt++ + mean[j];
+        }
+    }
+
+}
+
+
+/*********************************************
  * IndexPreTransform
  *********************************************/
 
@@ -804,6 +867,7 @@ IndexPreTransform::IndexPreTransform (
     index (index), own_fields (false)
 {
     is_trained = index->is_trained;
+    ntotal = index->ntotal;
 }
 
 
@@ -814,6 +878,7 @@ IndexPreTransform::IndexPreTransform (
     index (index), own_fields (false)
 {
     is_trained = index->is_trained;
+    ntotal = index->ntotal;
     prepend_transform (ltrans);
 }
 
@@ -935,7 +1000,7 @@ void IndexPreTransform::add (idx_t n, const float *x)
 }
 
 void IndexPreTransform::add_with_ids (idx_t n, const float * x,
-                                      const long *xids)
+                                      const idx_t *xids)
 {
     FAISS_THROW_IF_NOT (is_trained);
     const float *xt = apply_chain (n, x);
@@ -956,14 +1021,24 @@ void IndexPreTransform::search (idx_t n, const float *x, idx_t k,
     index->search (n, xt, k, distances, labels);
 }
 
+void IndexPreTransform::range_search (idx_t n, const float* x, float radius,
+                                      RangeSearchResult* result) const
+{
+    FAISS_THROW_IF_NOT (is_trained);
+    const float *xt = apply_chain (n, x);
+    ScopeDeleter<float> del(xt == x ? nullptr : xt);
+    index->range_search (n, xt, radius, result);
+}
+
+
 
 void IndexPreTransform::reset () {
     index->reset();
     ntotal = 0;
 }
 
-long IndexPreTransform::remove_ids (const IDSelector & sel) {
-    long nremove = index->remove_ids (sel);
+size_t IndexPreTransform::remove_ids (const IDSelector & sel) {
+    size_t nremove = index->remove_ids (sel);
     ntotal = index->ntotal;
     return nremove;
 }

@@ -1,8 +1,7 @@
 /**
- * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD+Patents license found in the
+ * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
 
@@ -35,7 +34,9 @@ struct RangeSearchResult;
  * vectors.
  */
 struct IndexBinary {
-  typedef long idx_t;    ///< all indices are this type
+  using idx_t = Index::idx_t;    ///< all indices are this type
+  using component_t = uint8_t;
+  using distance_t = int32_t;
 
   int d;                 ///< vector dimension
   int code_size;   ///< number of bytes per vector ( = d / 8 )
@@ -82,7 +83,7 @@ struct IndexBinary {
    *
    * @param xids if non-null, ids to store for the vectors (size n)
    */
-  virtual void add_with_ids(idx_t n, const uint8_t *x, const long *xids);
+  virtual void add_with_ids(idx_t n, const uint8_t *x, const idx_t *xids);
 
   /** Query n vectors of dimension d to the index.
    *
@@ -122,7 +123,7 @@ struct IndexBinary {
 
   /** Removes IDs from the index. Not supported by all indexes.
    */
-  virtual long remove_ids(const IDSelector& sel);
+  virtual size_t remove_ids(const IDSelector& sel);
 
   /** Reconstruct a stored vector.
    *

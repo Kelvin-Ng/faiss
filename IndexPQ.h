@@ -1,8 +1,7 @@
 /**
- * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD+Patents license found in the
+ * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
 
@@ -62,7 +61,9 @@ struct IndexPQ: Index {
 
     void reconstruct(idx_t key, float* recons) const override;
 
-    long remove_ids(const IDSelector& sel) override;
+    size_t remove_ids(const IDSelector& sel) override;
+
+    DistanceComputer * get_distance_computer() const override;
 
     /******************************************************
      * Polysemous codes implementation
@@ -101,7 +102,7 @@ struct IndexPQ: Index {
     /// @param dist_histogram (M * nbits + 1)
     void hamming_distance_histogram (idx_t n, const float *x,
                                      idx_t nb, const float *xb,
-                                     long *dist_histogram);
+                                     int64_t *dist_histogram);
 
     /** compute pairwise distances between queries and database
      *

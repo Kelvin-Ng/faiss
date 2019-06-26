@@ -1,8 +1,7 @@
 /**
- * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD+Patents license found in the
+ * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
 
@@ -59,6 +58,11 @@ bool getFullUnifiedMemSupport(int device);
 /// Equivalent to getFullUnifiedMemSupport(getCurrentDevice())
 bool getFullUnifiedMemSupportCurrentDevice();
 
+/// Returns the maximum k-selection value supported based on the CUDA SDK that
+/// we were compiled with. .cu files can use DeviceDefs.cuh, but this is for
+/// non-CUDA files
+int getMaxKSelection();
+
 /// RAII object to set the current device, and restore the previous
 /// device upon destruction
 class DeviceScope {
@@ -107,10 +111,11 @@ class CudaEvent {
 };
 
 /// Wrapper to test return status of CUDA functions
-#define CUDA_VERIFY(X)                          \
+#define CUDA_VERIFY(X)                                                  \
   do {                                                                  \
     auto err__ = (X);                                                   \
-    FAISS_ASSERT_FMT(err__ == cudaSuccess, "CUDA error %d", (int) err__); \
+    FAISS_ASSERT_FMT(err__ == cudaSuccess, "CUDA error %d %s",          \
+                     (int) err__, cudaGetErrorString(err__));           \
   } while (0)
 
 /// Wrapper to synchronously probe for CUDA errors

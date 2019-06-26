@@ -1,8 +1,7 @@
 /**
- * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD+Patents license found in the
+ * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
 
@@ -75,7 +74,7 @@ DeviceTensor<T, Dim, InnerContig, IndexT, PtrTraits>::DeviceTensor(
     state_(AllocState::Owner),
     space_(space) {
 
-  allocMemorySpace(space, (void**) &this->data_, this->getSizeInBytes());
+  allocMemorySpace(space, &this->data_, this->getSizeInBytes());
   FAISS_ASSERT(this->data_ || (this->getSizeInBytes() == 0));
 }
 
@@ -89,7 +88,7 @@ DeviceTensor<T, Dim, InnerContig, IndexT, PtrTraits>::DeviceTensor(
     state_(AllocState::Owner),
     space_(space) {
 
-  allocMemorySpace(space, (void**) &this->data_, this->getSizeInBytes());
+  allocMemorySpace(space, &this->data_, this->getSizeInBytes());
   FAISS_ASSERT(this->data_ || (this->getSizeInBytes() == 0));
 }
 
@@ -183,7 +182,7 @@ DeviceTensor<T, Dim, InnerContig, IndexT, PtrTraits>::DeviceTensor(
     state_(AllocState::Owner),
     space_(space) {
 
-  allocMemorySpace(space_, (void**) &this->data_, this->getSizeInBytes());
+  allocMemorySpace(space_, &this->data_, this->getSizeInBytes());
   FAISS_ASSERT(this->data_ || (this->getSizeInBytes() == 0));
   this->copyFrom(t, stream);
 }

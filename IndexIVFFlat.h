@@ -1,8 +1,7 @@
 /**
- * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD+Patents license found in the
+ * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
 
@@ -12,6 +11,7 @@
 #define FAISS_INDEX_IVF_FLAT_H
 
 #include <unordered_map>
+#include <stdint.h>
 
 #include "IndexIVF.h"
 
@@ -29,33 +29,19 @@ struct IndexIVFFlat: IndexIVF {
             MetricType = METRIC_L2);
 
     /// same as add_with_ids, with precomputed coarse quantizer
-    virtual void add_core (idx_t n, const float * x, const long *xids,
-                   const long *precomputed_idx);
+    virtual void add_core (idx_t n, const float * x, const int64_t *xids,
+                   const int64_t *precomputed_idx);
 
     /// implemented for all IndexIVF* classes
-    void add_with_ids(idx_t n, const float* x, const long* xids) override;
+    void add_with_ids(idx_t n, const float* x, const idx_t* xids) override;
 
     void encode_vectors(idx_t n, const float* x,
                         const idx_t *list_nos,
                         uint8_t * codes) const override;
 
-    /*
-    void search_preassigned (idx_t n, const float *x, idx_t k,
-                             const idx_t *assign,
-                             const float *centroid_dis,
-                             float *distances, idx_t *labels,
-                             bool store_pairs,
-                             const IVFSearchParameters *params=nullptr
-                             ) const override;
-    */
+
     InvertedListScanner *get_InvertedListScanner (bool store_pairs)
         const override;
-
-    void range_search(
-        idx_t n,
-        const float* x,
-        float radius,
-        RangeSearchResult* result) const override;
 
     /** Update a subset of vectors.
      *
@@ -67,7 +53,7 @@ struct IndexIVFFlat: IndexIVF {
      */
     virtual void update_vectors (int nv, idx_t *idx, const float *v);
 
-    void reconstruct_from_offset (long list_no, long offset,
+    void reconstruct_from_offset (int64_t list_no, int64_t offset,
                                   float* recons) const override;
 
     IndexIVFFlat () {}
@@ -89,7 +75,7 @@ struct IndexIVFFlatDedup: IndexIVFFlat {
     void train(idx_t n, const float* x) override;
 
     /// implemented for all IndexIVF* classes
-    void add_with_ids(idx_t n, const float* x, const long* xids) override;
+    void add_with_ids(idx_t n, const float* x, const idx_t* xids) override;
 
     void search_preassigned (idx_t n, const float *x, idx_t k,
                              const idx_t *assign,
@@ -99,7 +85,7 @@ struct IndexIVFFlatDedup: IndexIVFFlat {
                              const IVFSearchParameters *params=nullptr
                              ) const override;
 
-    long remove_ids(const IDSelector& sel) override;
+    size_t remove_ids(const IDSelector& sel) override;
 
     /// not implemented
     void range_search(
@@ -113,7 +99,7 @@ struct IndexIVFFlatDedup: IndexIVFFlat {
 
 
     /// not implemented
-    void reconstruct_from_offset (long list_no, long offset,
+    void reconstruct_from_offset (int64_t list_no, int64_t offset,
                                   float* recons) const override;
 
     IndexIVFFlatDedup () {}

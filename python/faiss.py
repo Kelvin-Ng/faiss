@@ -1,7 +1,6 @@
-# Copyright (c) 2015-present, Facebook, Inc.
-# All rights reserved.
+# Copyright (c) Facebook, Inc. and its affiliates.
 #
-# This source code is licensed under the BSD+Patents license found in the
+# This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
 #@nolint
@@ -16,16 +15,7 @@ import pdb
 
 
 # we import * so that the symbol X can be accessed as faiss.X
-
-try:
-    from .swigfaiss_gpu import *
-except ImportError as e:
-
-    if 'No module named' not in e.args[0]:
-        # swigfaiss_gpu is there but failed to load: Warn user about it.
-        sys.stderr.write("Failed to load GPU Faiss: %s\n" % e.args[0])
-        sys.stderr.write("Faiss falling back to CPU-only.\n")
-    from .swigfaiss import *
+from .swigfaiss import *
 
 __version__ = "%d.%d.%d" % (FAISS_VERSION_MAJOR,
                             FAISS_VERSION_MINOR,
@@ -213,6 +203,11 @@ def handle_IndexBinary(the_class):
         assert d * 8 == self.d
         self.train_c(n, swig_ptr(x))
 
+    def replacement_reconstruct(self, key):
+        x = np.empty(self.d // 8, dtype=np.uint8)
+        self.reconstruct_c(key, swig_ptr(x))
+        return x
+
     def replacement_search(self, x, k):
         n, d = x.shape
         assert d * 8 == self.d
@@ -223,10 +218,21 @@ def handle_IndexBinary(the_class):
                       swig_ptr(labels))
         return distances, labels
 
+    def replacement_remove_ids(self, x):
+        if isinstance(x, IDSelector):
+            sel = x
+        else:
+            assert x.ndim == 1
+            sel = IDSelectorBatch(x.size, swig_ptr(x))
+        return self.remove_ids_c(sel)
+
     replace_method(the_class, 'add', replacement_add)
     replace_method(the_class, 'add_with_ids', replacement_add_with_ids)
     replace_method(the_class, 'train', replacement_train)
     replace_method(the_class, 'search', replacement_search)
+    replace_method(the_class, 'reconstruct', replacement_reconstruct)
+    replace_method(the_class, 'remove_ids', replacement_remove_ids)
+
 
 def handle_VectorTransform(the_class):
 
@@ -283,6 +289,18 @@ def handle_ParameterSpace(the_class):
                        crit, ops)
         return ops
     replace_method(the_class, 'explore', replacement_explore)
+
+
+def handle_MatrixStats(the_class):
+    original_init = the_class.__init__
+
+    def replacement_init(self, m):
+        assert len(m.shape) == 2
+        original_init(self, m.shape[0], m.shape[1], swig_ptr(m))
+
+    the_class.__init__ = replacement_init
+
+handle_MatrixStats(MatrixStats)
 
 
 this_module = sys.modules[__name__]
@@ -377,17 +395,22 @@ add_ref_in_constructor(Level1Quantizer, 0)
 add_ref_in_constructor(IndexIVFScalarQuantizer, 0)
 add_ref_in_constructor(IndexIDMap, 0)
 add_ref_in_constructor(IndexIDMap2, 0)
+add_ref_in_constructor(IndexHNSW, 0)
 add_ref_in_method(IndexShards, 'add_shard', 0)
+add_ref_in_method(IndexBinaryShards, 'add_shard', 0)
 add_ref_in_constructor(IndexRefineFlat, 0)
 add_ref_in_constructor(IndexBinaryIVF, 0)
 add_ref_in_constructor(IndexBinaryFromFloat, 0)
+add_ref_in_constructor(IndexBinaryIDMap, 0)
+add_ref_in_constructor(IndexBinaryIDMap2, 0)
 
+add_ref_in_method(IndexReplicas, 'addIndex', 0)
+add_ref_in_method(IndexBinaryReplicas, 'addIndex', 0)
 
-if hasattr(this_module, 'IndexProxy'):
-    add_ref_in_method(IndexProxy, 'addIndex', 0)
-    # seems really marginal...
-    # remove_ref_from_method(IndexProxy, 'removeIndex', 0)
+# seems really marginal...
+# remove_ref_from_method(IndexReplicas, 'removeIndex', 0)
 
+if hasattr(this_module, 'GpuIndexFlat'):
     # handle all the GPUResources refs
     add_ref_in_function('index_cpu_to_gpu', 0)
     add_ref_in_constructor(GpuIndexFlat, 0)
@@ -446,7 +469,8 @@ def vector_to_array(v):
     assert classname.endswith('Vector')
     dtype = np.dtype(vector_name_map[classname[:-6]])
     a = np.empty(v.size(), dtype=dtype)
-    memcpy(swig_ptr(a), v.data(), a.nbytes)
+    if v.size() > 0:
+        memcpy(swig_ptr(a), v.data(), a.nbytes)
     return a
 
 
@@ -464,7 +488,8 @@ def copy_array_to_vector(a, v):
         'cannot copy a %s array to a %s (should be %s)' % (
             a.dtype, classname, dtype))
     v.resize(n)
-    memcpy(v.data(), swig_ptr(a), a.nbytes)
+    if n > 0:
+        memcpy(v.data(), swig_ptr(a), a.nbytes)
 
 
 ###########################################
@@ -505,21 +530,45 @@ def kmax(array, k):
     return D, I
 
 
+def pairwise_distances(xq, xb, mt=METRIC_L2, metric_arg=0):
+    """compute the whole pairwise distance matrix between two sets of
+    vectors"""
+    nq, d = xq.shape
+    nb, d2 = xb.shape
+    assert d == d2
+    dis = np.empty((nq, nb), dtype='float32')
+    if mt == METRIC_L2:
+        pairwise_L2sqr(
+            d, nq, swig_ptr(xq),
+            nb, swig_ptr(xb),
+            swig_ptr(dis))
+    else:
+        pairwise_extra_distances(
+            d, nq, swig_ptr(xq),
+            nb, swig_ptr(xb),
+            mt, metric_arg,
+            swig_ptr(dis))
+    return dis
+
+
+
+
 def rand(n, seed=12345):
     res = np.empty(n, dtype='float32')
-    float_rand(swig_ptr(res), n, seed)
+    float_rand(swig_ptr(res), res.size, seed)
     return res
 
 
-def lrand(n, seed=12345):
+def randint(n, seed=12345):
     res = np.empty(n, dtype='int64')
-    long_rand(swig_ptr(res), n, seed)
+    int64_rand(swig_ptr(res), res.size, seed)
     return res
 
+lrand = randint
 
 def randn(n, seed=12345):
     res = np.empty(n, dtype='float32')
-    float_randn(swig_ptr(res), n, seed)
+    float_randn(swig_ptr(res), res.size, seed)
     return res
 
 
@@ -560,18 +609,24 @@ replace_method(MapLong2Long, 'search_multiple', replacement_map_search_multiple)
 
 
 class Kmeans:
+    """shallow wrapper around the Clustering object. The important method
+    is train()."""
 
-    def __init__(self, d, k, niter=25, verbose=False, spherical = False):
+    def __init__(self, d, k, **kwargs):
+        """d: input dimension, k: nb of centroids. Additional
+         parameters are passed on the ClusteringParameters object,
+         including niter=25, verbose=False, spherical = False
+        """
         self.d = d
         self.k = k
         self.cp = ClusteringParameters()
-        self.cp.niter = niter
-        self.cp.verbose = verbose
-        self.cp.spherical = spherical
+        for k, v in kwargs.items():
+            # if this raises an exception, it means that it is a non-existent field
+            getattr(self.cp, k)
+            setattr(self.cp, k, v)
         self.centroids = None
 
     def train(self, x):
-        assert x.flags.contiguous
         n, d = x.shape
         assert d == self.d
         clus = Clustering(d, self.k, self.cp)
@@ -583,7 +638,7 @@ class Kmeans:
         centroids = vector_float_to_array(clus.centroids)
         self.centroids = centroids.reshape(self.k, d)
         self.obj = vector_float_to_array(clus.obj)
-        return self.obj[-1]
+        return self.obj[-1] if self.obj.size > 0 else 0.0
 
     def assign(self, x):
         assert self.centroids is not None, "should train before assigning"
@@ -591,3 +646,8 @@ class Kmeans:
         index.add(self.centroids)
         D, I = index.search(x, 1)
         return D.ravel(), I.ravel()
+
+# IndexProxy was renamed to IndexReplicas, remap the old name for any old code
+# people may have
+IndexProxy = IndexReplicas
+ConcatenatedInvertedLists = HStackInvertedLists

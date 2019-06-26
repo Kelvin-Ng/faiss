@@ -1,8 +1,7 @@
 /**
- * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD+Patents license found in the
+ * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
 
@@ -16,12 +15,13 @@
 #include "../IndexIVF.h"
 #include "../IndexIVFFlat.h"
 #include "../IndexIVFPQ.h"
+#include "../IndexReplicas.h"
 #include "../VectorTransform.h"
 #include "../MetaIndexes.h"
 #include "GpuIndexFlat.h"
 #include "GpuIndexIVFFlat.h"
 #include "GpuIndexIVFPQ.h"
-#include "IndexProxy.h"
+#include "utils/DeviceUtils.h"
 
 namespace faiss { namespace gpu {
 
@@ -66,21 +66,21 @@ struct ToCPUCloner: Cloner {
             ipq->copyTo(res);
             return res;
 
-            // for IndexShards and IndexProxy we assume that the
+            // for IndexShards and IndexReplicas we assume that the
             // objective is to make a single component out of them
             // (inverse op of ToGpuClonerMultiple)
 
         } else if(auto ish = dynamic_cast<const IndexShards *>(index)) {
-            int nshard = ish->shard_indexes.size();
+            int nshard = ish->count();
             FAISS_ASSERT(nshard > 0);
-            Index *res = clone_Index(ish->shard_indexes[0]);
-            for(int i = 1; i < ish->shard_indexes.size(); i++) {
-                Index *res_i = clone_Index(ish->shard_indexes[i]);
+            Index *res = clone_Index(ish->at(0));
+            for(int i = 1; i < ish->count(); i++) {
+                Index *res_i = clone_Index(ish->at(i));
                 merge_index(res, res_i, ish->successive_ids);
                 delete res_i;
             }
             return res;
-        } else if(auto ipr = dynamic_cast<const IndexProxy *>(index)) {
+        } else if(auto ipr = dynamic_cast<const IndexReplicas *>(index)) {
             // just clone one of the replicas
             FAISS_ASSERT(ipr->count() > 0);
             return clone_Index(ipr->at(0));
@@ -297,7 +297,7 @@ struct ToGpuClonerMultiple: faiss::Cloner, GpuMultipleClonerOptions {
            dynamic_cast<const faiss::IndexIVFFlat *>(index) ||
            dynamic_cast<const faiss::IndexIVFPQ *>(index)) {
             if(!shard) {
-                IndexProxy * res = new IndexProxy();
+                IndexReplicas * res = new IndexReplicas();
                 for(auto & sub_cloner: sub_cloners) {
                     res->addIndex(sub_cloner.clone_Index(index));
                 }
@@ -366,20 +366,20 @@ void GpuParameterSpace::initialize (const Index * index)
     if (DC (IndexPreTransform)) {
         index = ix->index;
     }
-    if (DC (IndexProxy)) {
+    if (DC (IndexReplicas)) {
         if (ix->count() == 0) return;
         index = ix->at(0);
     }
-    if (DC (faiss::IndexShards)) {
-        if (ix->shard_indexes.size() == 0) return;
-        index = ix->shard_indexes[0];
+    if (DC (IndexShards)) {
+        if (ix->count() == 0) return;
+        index = ix->at(0);
     }
     if (DC (GpuIndexIVF)) {
         ParameterRange & pr = add_range("nprobe");
         for (int i = 0; i < 12; i++) {
             size_t nprobe = 1 << i;
             if (nprobe >= ix->getNumLists() ||
-                nprobe > 1024) break;
+                nprobe > getMaxKSelection()) break;
             pr.values.push_back (nprobe);
         }
     }
@@ -397,7 +397,7 @@ void GpuParameterSpace::initialize (const Index * index)
 void GpuParameterSpace::set_index_parameter (
         Index * index, const std::string & name, double val) const
 {
-    if (DC (IndexProxy)) {
+    if (DC (IndexReplicas)) {
         for (int i = 0; i < ix->count(); i++)
             set_index_parameter (ix->at(i), name, val);
         return;

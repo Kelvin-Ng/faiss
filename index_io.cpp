@@ -1,8 +1,7 @@
 /**
- * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD+Patents license found in the
+ * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
 
@@ -28,6 +27,7 @@
 #include "IndexIVF.h"
 #include "IndexIVFPQ.h"
 #include "IndexIVFFlat.h"
+#include "IndexIVFSpectralHash.h"
 #include "MetaIndexes.h"
 #include "IndexScalarQuantizer.h"
 #include "IndexHNSW.h"
@@ -137,12 +137,13 @@ struct FileIOReader: IOReader {
         need_close = true;
     }
 
-    ~FileIOReader() {
+    ~FileIOReader() override {
         if (need_close) {
             int ret = fclose(f);
-            FAISS_THROW_IF_NOT_FMT (
-               ret == 0, "file %s close error: %s",
-               name.c_str(), strerror(errno));
+            if (ret != 0) {// we cannot raise and exception in the destructor
+                fprintf(stderr, "file %s close error: %s",
+                        name.c_str(), strerror(errno));
+            }
         }
     }
 
@@ -173,12 +174,14 @@ struct FileIOWriter: IOWriter {
         need_close = true;
     }
 
-    ~FileIOWriter() {
+    ~FileIOWriter() override {
         if (need_close) {
             int ret = fclose(f);
-            FAISS_THROW_IF_NOT_FMT (
-               ret == 0, "file %s close error: %s",
-               name.c_str(), strerror(errno));
+            if (ret != 0) {
+                // we cannot raise and exception in the destructor
+                fprintf(stderr, "file %s close error: %s",
+                        name.c_str(), strerror(errno));
+            }
         }
     }
 
@@ -207,6 +210,9 @@ static void write_index_header (const Index *idx, IOWriter *f) {
     WRITE1 (dummy);
     WRITE1 (idx->is_trained);
     WRITE1 (idx->metric_type);
+    if (idx->metric_type > 1) {
+        WRITE1 (idx->metric_arg);
+    }
 }
 
 void write_VectorTransform (const VectorTransform *vt, IOWriter *f) {
@@ -243,6 +249,11 @@ void write_VectorTransform (const VectorTransform *vt, IOWriter *f) {
         uint32_t h = fourcc ("VNrm");
         WRITE1 (h);
         WRITE1 (nt->norm);
+    } else if (const CenteringTransform *ct =
+               dynamic_cast<const CenteringTransform *>(vt)) {
+        uint32_t h = fourcc ("VCnt");
+        WRITE1 (h);
+        WRITEVECTOR (ct->mean);
     } else {
         FAISS_THROW_MSG ("cannot serialize this");
     }
@@ -445,12 +456,24 @@ void write_index (const Index *idx, IOWriter *f) {
         write_InvertedLists (ivfl->invlists, f);
     } else if(const IndexIVFScalarQuantizer * ivsc =
               dynamic_cast<const IndexIVFScalarQuantizer *> (idx)) {
-        uint32_t h = fourcc ("IwSQ");
+        uint32_t h = fourcc ("IwSq");
         WRITE1 (h);
         write_ivf_header (ivsc, f);
         write_ScalarQuantizer (&ivsc->sq, f);
         WRITE1 (ivsc->code_size);
+        WRITE1 (ivsc->by_residual);
         write_InvertedLists (ivsc->invlists, f);
+    } else if(const IndexIVFSpectralHash *ivsp =
+              dynamic_cast<const IndexIVFSpectralHash *>(idx)) {
+        uint32_t h = fourcc ("IwSh");
+        WRITE1 (h);
+        write_ivf_header (ivsp, f);
+        write_VectorTransform (ivsp->vt, f);
+        WRITE1 (ivsp->nbit);
+        WRITE1 (ivsp->period);
+        WRITE1 (ivsp->threshold_type);
+        WRITEVECTOR (ivsp->trained);
+        write_InvertedLists (ivsp->invlists, f);
     } else if(const IndexIVFPQ * ivpq =
               dynamic_cast<const IndexIVFPQ *> (idx)) {
         const IndexIVFPQR * ivfpqr = dynamic_cast<const IndexIVFPQR *> (idx);
@@ -547,6 +570,9 @@ static void read_index_header (Index *idx, IOReader *f) {
     READ1 (dummy);
     READ1 (idx->is_trained);
     READ1 (idx->metric_type);
+    if (idx->metric_type > 1) {
+        READ1 (idx->metric_arg);
+    }
     idx->verbose = false;
 }
 
@@ -589,6 +615,10 @@ VectorTransform* read_VectorTransform (IOReader *f) {
         NormalizationTransform *nt = new NormalizationTransform ();
         READ1 (nt->norm);
         vt = nt;
+    } else if (h == fourcc ("VCnt")) {
+        CenteringTransform *ct = new CenteringTransform ();
+        READVECTOR (ct->mean);
+        vt = ct;
     } else {
         FAISS_THROW_MSG("fourcc not recognized");
     }
@@ -703,6 +733,30 @@ InvertedLists *read_InvertedLists (IOReader *f, int io_flags) {
             std::vector<char> x;
             READVECTOR(x);
             od->filename.assign(x.begin(), x.end());
+
+            if (io_flags & IO_FLAG_ONDISK_SAME_DIR) {
+                FileIOReader *reader = dynamic_cast<FileIOReader*>(f);
+                FAISS_THROW_IF_NOT_MSG (
+                    reader, "IO_FLAG_ONDISK_SAME_DIR only supported "
+                    "when reading from file");
+                std::string indexname = reader->name;
+                std::string dirname = "./";
+                size_t slash = indexname.find_last_of('/');
+                if (slash != std::string::npos) {
+                    dirname = indexname.substr(0, slash + 1);
+                }
+                std::string filename = od->filename;
+                slash = filename.find_last_of('/');
+                if (slash != std::string::npos) {
+                    filename = filename.substr(slash + 1);
+                }
+                filename = dirname + filename;
+                printf("IO_FLAG_ONDISK_SAME_DIR: "
+                       "updating ondisk filename from %s to %s\n",
+                       od->filename.c_str(), filename.c_str());
+                od->filename = filename;
+            }
+
         }
         READ1(od->totsize);
         od->do_mmap();
@@ -829,14 +883,16 @@ static IndexIVFPQ *read_ivfpq (IOReader *f, uint32_t h, int io_flags)
         read_InvertedLists (ivpq, f, io_flags);
     }
 
-    // precomputed table not stored. It is cheaper to recompute it
-    ivpq->use_precomputed_table = 0;
-    if (ivpq->by_residual)
-        ivpq->precompute_table ();
-    if (ivfpqr) {
-        read_ProductQuantizer (&ivfpqr->refine_pq, f);
-        READVECTOR (ivfpqr->refine_codes);
-        READ1 (ivfpqr->k_factor);
+    if (ivpq->is_trained) {
+        // precomputed table not stored. It is cheaper to recompute it
+        ivpq->use_precomputed_table = 0;
+        if (ivpq->by_residual)
+            ivpq->precompute_table ();
+        if (ivfpqr) {
+            read_ProductQuantizer (&ivfpqr->refine_pq, f);
+            READVECTOR (ivfpqr->refine_codes);
+            READ1 (ivfpqr->k_factor);
+        }
     }
     return ivpq;
 }
@@ -963,13 +1019,31 @@ Index *read_index (IOReader *f, int io_flags) {
         for(int i = 0; i < ivsc->nlist; i++)
             READVECTOR (ail->codes[i]);
         idx = ivsc;
-    } else if(h == fourcc ("IwSQ")) {
+    } else if(h == fourcc ("IwSQ") || h == fourcc ("IwSq")) {
         IndexIVFScalarQuantizer * ivsc = new IndexIVFScalarQuantizer();
         read_ivf_header (ivsc, f);
         read_ScalarQuantizer (&ivsc->sq, f);
         READ1 (ivsc->code_size);
+        if (h == fourcc ("IwSQ")) {
+            ivsc->by_residual = true;
+        } else {
+            READ1 (ivsc->by_residual);
+        }
         read_InvertedLists (ivsc, f, io_flags);
         idx = ivsc;
+    } else if(h == fourcc ("IwSh")) {
+        IndexIVFSpectralHash *ivsp = new IndexIVFSpectralHash ();
+        read_ivf_header (ivsp, f);
+        ivsp->vt = read_VectorTransform (f);
+        ivsp->own_fields = true;
+        READ1 (ivsp->nbit);
+        // not stored by write_ivf_header
+        ivsp->code_size = (ivsp->nbit + 7) / 8;
+        READ1 (ivsp->period);
+        READ1 (ivsp->threshold_type);
+        READVECTOR (ivsp->trained);
+        read_InvertedLists (ivsp, f, io_flags);
+        idx = ivsp;
     } else if(h == fourcc ("IvPQ") || h == fourcc ("IvQR") ||
               h == fourcc ("IwPQ") || h == fourcc ("IwQR")) {
 
@@ -1200,6 +1274,16 @@ void write_index_binary (const IndexBinary *idx, IOWriter *f) {
         write_index_binary_header (idxhnsw, f);
         write_HNSW (&idxhnsw->hnsw, f);
         write_index_binary (idxhnsw->storage, f);
+    } else if(const IndexBinaryIDMap * idxmap =
+              dynamic_cast<const IndexBinaryIDMap *> (idx)) {
+        uint32_t h =
+            dynamic_cast<const IndexBinaryIDMap2 *> (idx) ? fourcc ("IBM2") :
+            fourcc ("IBMp");
+        // no need to store additional info for IndexIDMap2
+        WRITE1 (h);
+        write_index_binary_header (idxmap, f);
+        write_index_binary (idxmap->index, f);
+        WRITEVECTOR (idxmap->id_map);
     } else {
         FAISS_THROW_MSG ("don't know how to serialize this type of index");
     }
@@ -1271,6 +1355,18 @@ IndexBinary *read_index_binary (IOReader *f, int io_flags) {
         idxhnsw->storage = read_index_binary (f, io_flags);
         idxhnsw->own_fields = true;
         idx = idxhnsw;
+    } else if(h == fourcc ("IBMp") || h == fourcc ("IBM2")) {
+        bool is_map2 = h == fourcc ("IBM2");
+        IndexBinaryIDMap * idxmap = is_map2 ?
+            new IndexBinaryIDMap2 () : new IndexBinaryIDMap ();
+        read_index_binary_header (idxmap, f);
+        idxmap->index = read_index_binary (f, io_flags);
+        idxmap->own_fields = true;
+        READVECTOR (idxmap->id_map);
+        if (is_map2) {
+            static_cast<IndexBinaryIDMap2*>(idxmap)->construct_rev_map ();
+        }
+        idx = idxmap;
     } else {
         FAISS_THROW_FMT("Index type 0x%08x not supported\n", h);
         idx = nullptr;

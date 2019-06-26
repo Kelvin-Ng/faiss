@@ -1,8 +1,7 @@
 /**
- * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD+Patents license found in the
+ * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
 
@@ -155,12 +154,12 @@ GpuIndexBinaryFlat::search(faiss::IndexBinary::idx_t n,
   }
 
   // For now, only support <= max int results
-  FAISS_THROW_IF_NOT_FMT(n <=
-                         (faiss::Index::idx_t) std::numeric_limits<int>::max(),
+  FAISS_THROW_IF_NOT_FMT(n <= (Index::idx_t) std::numeric_limits<int>::max(),
                          "GPU index only supports up to %zu indices",
                          (size_t) std::numeric_limits<int>::max());
-  FAISS_THROW_IF_NOT_FMT(k <= 1024,
-                         "GPU only supports k <= 1024 (requested %d)",
+  FAISS_THROW_IF_NOT_FMT(k <= (Index::idx_t) getMaxKSelection(),
+                         "GPU only supports k <= %d (requested %d)",
+                         getMaxKSelection(),
                          (int) k); // select limitation
 
   DeviceScope scope(config_.device);

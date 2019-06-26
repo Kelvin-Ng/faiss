@@ -1,8 +1,7 @@
 /**
- * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD+Patents license found in the
+ * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
 
@@ -35,7 +34,7 @@ double eval_codec_error (long ncentroids, long m, const std::vector<float> &v)
 
     // encode and decode to compute reconstruction error
 
-    std::vector<long> keys (nb);
+    std::vector<faiss::Index::idx_t> keys (nb);
     std::vector<uint8_t> codes (nb * m);
     index.encode_multiple (nb, keys.data(), v.data(), codes.data(), true);
 

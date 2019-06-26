@@ -1,7 +1,6 @@
-# Copyright (c) 2015-present, Facebook, Inc.
-# All rights reserved.
+# Copyright (c) Facebook, Inc. and its affiliates.
 #
-# This source code is licensed under the BSD+Patents license found in the
+# This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
 #! /usr/bin/env python2
@@ -12,6 +11,7 @@ import numpy as np
 import unittest
 import faiss
 import os
+import shutil
 import tempfile
 
 from common import get_dataset_2
@@ -113,6 +113,38 @@ class TestRemove(unittest.TestCase):
                 assert searchres[0] != idx[i]
             else:
                 assert searchres[0] == idx[i]
+
+    def test_remove_id_map_binary(self):
+        sub_index = faiss.IndexBinaryFlat(40)
+        xb = np.zeros((10, 5), dtype='uint8')
+        xb[:, 0] = np.arange(10) + 100
+        index = faiss.IndexBinaryIDMap2(sub_index)
+        index.add_with_ids(xb, np.arange(10) + 1000)
+        assert index.reconstruct(1004)[0] == 104
+        index.remove_ids(np.array([1003]))
+        assert index.reconstruct(1004)[0] == 104
+        try:
+            index.reconstruct(1003)
+        except:
+            pass
+        else:
+            assert False, 'should have raised an exception'
+
+        # while we are there, let's test I/O as well...
+        _, tmpnam = tempfile.mkstemp()
+        try:
+            faiss.write_index_binary(index, tmpnam)
+            index = faiss.read_index_binary(tmpnam)
+        finally:
+            os.remove(tmpnam)
+
+        assert index.reconstruct(1004)[0] == 104
+        try:
+            index.reconstruct(1003)
+        except:
+            pass
+        else:
+            assert False, 'should have raised an exception'
 
 
 
@@ -442,6 +474,97 @@ class TestSerialize(unittest.TestCase):
 
         Dnew, Inew = index3.search(xq, 5)
         assert np.all(Dnew == Dref) and np.all(Inew == Iref)
+
+
+class TestRenameOndisk(unittest.TestCase):
+
+    def test_rename(self):
+        d = 10
+        nb = 500
+        nq = 100
+        nt = 100
+
+        xt, xb, xq = get_dataset_2(d, nb, nt, nq)
+
+        quantizer = faiss.IndexFlatL2(d)
+
+        index1 = faiss.IndexIVFFlat(quantizer, d, 20)
+        index1.train(xt)
+
+        dirname = tempfile.mkdtemp()
+
+        try:
+
+            # make an index with ondisk invlists
+            invlists = faiss.OnDiskInvertedLists(
+                index1.nlist, index1.code_size,
+                dirname + '/aa.ondisk')
+            index1.replace_invlists(invlists)
+            index1.add(xb)
+            D1, I1 = index1.search(xq, 10)
+            faiss.write_index(index1, dirname + '/aa.ivf')
+
+            # move the index elsewhere
+            os.mkdir(dirname + '/1')
+            for fname in 'aa.ondisk', 'aa.ivf':
+                os.rename(dirname + '/' + fname,
+                          dirname + '/1/' + fname)
+
+            # try to read it: fails!
+            try:
+                index2 = faiss.read_index(dirname + '/1/aa.ivf')
+            except RuntimeError:
+                pass   # normal
+            else:
+                assert False
+
+            # read it with magic flag
+            index2 = faiss.read_index(dirname + '/1/aa.ivf',
+                                      faiss.IO_FLAG_ONDISK_SAME_DIR)
+            D2, I2 = index2.search(xq, 10)
+            assert np.all(I1 == I2)
+
+        finally:
+            shutil.rmtree(dirname)
+
+
+class TestInvlistMeta(unittest.TestCase):
+
+    def test_slice_vstack(self):
+        d = 10
+        nb = 1000
+        nq = 100
+        nt = 200
+
+        xt, xb, xq = get_dataset_2(d, nb, nt, nq)
+
+        quantizer = faiss.IndexFlatL2(d)
+        index = faiss.IndexIVFFlat(quantizer, d, 30)
+
+        index.train(xt)
+        index.add(xb)
+        Dref, Iref = index.search(xq, 10)
+
+        # faiss.wait()
+
+        il0 = index.invlists
+        ils = []
+        ilv = faiss.InvertedListsPtrVector()
+        for sl in 0, 1, 2:
+            il = faiss.SliceInvertedLists(il0, sl * 10, sl * 10 + 10)
+            ils.append(il)
+            ilv.push_back(il)
+
+        il2 = faiss.VStackInvertedLists(ilv.size(), ilv.data())
+
+        index2 = faiss.IndexIVFFlat(quantizer, d, 30)
+        index2.replace_invlists(il2)
+        index2.ntotal = index.ntotal
+
+        D, I = index2.search(xq, 10)
+        assert np.all(D == Dref)
+        assert np.all(I == Iref)
+
 
 
 

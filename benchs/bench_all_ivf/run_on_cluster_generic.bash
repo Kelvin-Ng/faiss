@@ -1,7 +1,6 @@
-# Copyright (c) 2015-present, Facebook, Inc.
-# All rights reserved.
+# Copyright (c) Facebook, Inc. and its affiliates.
 #
-# This source code is licensed under the BSD+Patents license found in the
+# This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
 # @nolint
@@ -23,14 +22,14 @@ function run_on_1machine () {
     # To be implemented
 }
 
-function run_on_1machine () {
+function run_on_8gpu () {
     # To be implemented
 }
 
 
 # prepare output directories
-
-basedir=/mnt/vol/gfsai-east/ai-group/users/matthijs/bench_all_ivf
+# set to some directory where all indexes, can be written.
+basedir=XXXXX
 
 logdir=$basedir/logs
 indexdir=$basedir/indexes
