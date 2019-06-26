@@ -1,8 +1,7 @@
 /**
- * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD+Patents license found in the
+ * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
 
@@ -234,7 +233,7 @@ void SlidingIndexWindow::step(const Index *sub_index, bool remove_oldest) {
             for (int j = 0; j + 1 < n_slice; j++) {
                 sizes[i][j] = sizes[i][j + 1] - amount_to_remove;
             }
-            sizes[i].resize(sizes[i].size() - 1);
+            sizes[i].pop_back ();
         }
         n_slice--;
     } else {

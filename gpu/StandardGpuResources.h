@@ -1,8 +1,7 @@
 /**
- * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD+Patents license found in the
+ * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
 
@@ -30,12 +29,11 @@ class StandardGpuResources : public GpuResources {
   void noTempMemory();
 
   /// Specify that we wish to use a certain fixed size of memory on
-  /// all devices as temporary memory
+  /// all devices as temporary memory. This is the upper bound for the GPU
+  /// memory that we will reserve. We will never go above 1.5 GiB on any GPU;
+  /// smaller GPUs (with <= 4 GiB or <= 8 GiB) will use less memory than that.
+  /// To avoid any temporary memory allocation, pass 0.
   void setTempMemory(size_t size);
-
-  /// Specify that we wish to use a certain fraction of memory on
-  /// all devices as temporary memory
-  void setTempMemoryFraction(float fraction);
 
   /// Set amount of pinned memory to allocate, for async GPU <-> CPU
   /// transfers
@@ -54,6 +52,8 @@ class StandardGpuResources : public GpuResources {
 
  public:
   /// Internal system calls
+
+  /// Initialize resources for this device
   void initializeForDevice(int device) override;
 
   cublasHandle_t getBlasHandle(int device) override;
@@ -67,6 +67,14 @@ class StandardGpuResources : public GpuResources {
   std::pair<void*, size_t> getPinnedMemory() override;
 
   cudaStream_t getAsyncCopyStream(int device) override;
+
+ private:
+  /// Have GPU resources been initialized for this device yet?
+  bool isInitialized(int device) const;
+
+  /// Adjust the default temporary memory allocation based on the total GPU
+  /// memory size
+  static size_t getDefaultTempMemForGPU(int device, size_t requested);
 
  private:
   /// Our default stream that work is ordered on, one per each device
@@ -92,15 +100,9 @@ class StandardGpuResources : public GpuResources {
   void* pinnedMemAlloc_;
   size_t pinnedMemAllocSize_;
 
-  /// By default, we reserve this fraction of memory on all devices
-  float tempMemFraction_;
-
   /// Another option is to use a specified amount of memory on all
   /// devices
   size_t tempMemSize_;
-
-  /// Whether we look at tempMemFraction_ or tempMemSize_
-  bool useFraction_;
 
   /// Amount of pinned memory we should allocate
   size_t pinnedMemSize_;

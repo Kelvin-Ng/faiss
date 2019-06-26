@@ -1,8 +1,7 @@
 /**
- * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD+Patents license found in the
+ * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
 
@@ -13,6 +12,10 @@
 #include <cmath>
 #include <cstdio>
 #include <cassert>
+#include <stdint.h>
+#ifdef __SSE__
+#include <immintrin.h>
+#endif
 
 #include <algorithm>
 
@@ -137,7 +140,7 @@ void IndexIVFPQ::train_residual_o (idx_t n, const float *x, float *residuals_2)
 
 
 /* produce a binary signature based on the residual vector */
-void IndexIVFPQ::encode (long key, const float * x, uint8_t * code) const
+void IndexIVFPQ::encode (idx_t key, const float * x, uint8_t * code) const
 {
     if (by_residual) {
         float residual_vec[d];
@@ -147,7 +150,7 @@ void IndexIVFPQ::encode (long key, const float * x, uint8_t * code) const
     else pq.compute_code (x, code);
 }
 
-void IndexIVFPQ::encode_multiple (size_t n, long *keys,
+void IndexIVFPQ::encode_multiple (size_t n, idx_t *keys,
                                   const float * x, uint8_t * xcodes,
                                   bool compute_keys) const
 {
@@ -157,7 +160,7 @@ void IndexIVFPQ::encode_multiple (size_t n, long *keys,
     encode_vectors (n, x, keys, xcodes);
 }
 
-void IndexIVFPQ::decode_multiple (size_t n, const long *keys,
+void IndexIVFPQ::decode_multiple (size_t n, const idx_t *keys,
                                   const uint8_t * xcodes, float * x) const
 {
     pq.decode (xcodes, x, n);
@@ -180,7 +183,7 @@ void IndexIVFPQ::decode_multiple (size_t n, const long *keys,
  * add                                                          */
 
 
-void IndexIVFPQ::add_with_ids (idx_t n, const float * x, const long *xids)
+void IndexIVFPQ::add_with_ids (idx_t n, const float * x, const idx_t *xids)
 {
     add_core_o (n, x, xids, nullptr);
 }
@@ -218,8 +221,8 @@ void IndexIVFPQ::encode_vectors(idx_t n, const float* x,
 }
 
 
-void IndexIVFPQ::add_core_o (idx_t n, const float * x, const long *xids,
-                             float *residuals_2, const long *precomputed_idx)
+void IndexIVFPQ::add_core_o (idx_t n, const float * x, const idx_t *xids,
+                             float *residuals_2, const idx_t *precomputed_idx)
 {
 
     idx_t bs = 32768;
@@ -238,15 +241,17 @@ void IndexIVFPQ::add_core_o (idx_t n, const float * x, const long *xids,
         return;
     }
 
+    InterruptCallback::check();
+
     FAISS_THROW_IF_NOT (is_trained);
     double t0 = getmillisecs ();
-    const long * idx;
-    ScopeDeleter<long> del_idx;
+    const idx_t * idx;
+    ScopeDeleter<idx_t> del_idx;
 
     if (precomputed_idx) {
         idx = precomputed_idx;
     } else {
-        long * idx0 = new long [n];
+        idx_t * idx0 = new idx_t [n];
         del_idx.set (idx0);
         quantizer->assign (n, x, idx0);
         idx = idx0;
@@ -308,7 +313,7 @@ void IndexIVFPQ::add_core_o (idx_t n, const float * x, const long *xids,
 }
 
 
-void IndexIVFPQ::reconstruct_from_offset (long list_no, long offset,
+void IndexIVFPQ::reconstruct_from_offset (int64_t list_no, int64_t offset,
                                           float* recons) const
 {
     const uint8_t* code = invlists->get_single_code (list_no, offset);
@@ -447,6 +452,7 @@ void IndexIVFPQ::precompute_table ()
         }
 
     }
+
 }
 
 namespace {
@@ -756,23 +762,65 @@ struct QueryTables {
 };
 
 
+
+template<class C>
+struct KnnSearchResults {
+    idx_t key;
+    const idx_t *ids;
+
+    // heap params
+    size_t k;
+    float * heap_sim;
+    idx_t * heap_ids;
+
+    size_t nup;
+
+    inline void add (idx_t j, float dis) {
+        if (C::cmp (heap_sim[0], dis)) {
+            heap_pop<C> (k, heap_sim, heap_ids);
+            idx_t id = ids ? ids[j] : (key << 32 | j);
+            heap_push<C> (k, heap_sim, heap_ids, dis, id);
+            nup++;
+        }
+    }
+
+};
+
+template<class C>
+struct RangeSearchResults {
+    idx_t key;
+    const idx_t *ids;
+
+    // wrapped result structure
+    float radius;
+    RangeQueryResult & rres;
+
+    inline void add (idx_t j, float dis) {
+        if (C::cmp (radius, dis)) {
+            idx_t id = ids ? ids[j] : (key << 32 | j);
+            rres.add (dis, id);
+        }
+    }
+};
+
+
+
 /*****************************************************
  * Scaning the codes.
  * The scanning functions call their favorite precompute_*
  * function to precompute the tables they need.
  *****************************************************/
-template <typename IDType, bool store_pairs, class C, MetricType METRIC_TYPE>
+template <typename IDType, MetricType METRIC_TYPE>
 struct IVFPQScannerT: QueryTables {
 
     const uint8_t * list_codes;
     const IDType * list_ids;
     size_t list_size;
 
-    explicit IVFPQScannerT (const IndexIVFPQ & ivfpq,
-                            const IVFSearchParameters *params):
+    IVFPQScannerT (const IndexIVFPQ & ivfpq, const IVFSearchParameters *params):
         QueryTables (ivfpq, params)
     {
-        FAISS_THROW_IF_NOT (pq.byte_per_idx == 1);
+        FAISS_THROW_IF_NOT (pq.nbits == 8);
         assert(METRIC_TYPE == metric_type);
     }
 
@@ -795,11 +843,10 @@ struct IVFPQScannerT: QueryTables {
      *****************************************************/
 
     /// version of the scan where we use precomputed tables
-    size_t scan_list_with_table (
-             size_t ncode, const uint8_t *codes, const idx_t *ids,
-             size_t k, float * heap_sim, long * heap_ids) const
+    template<class SearchResultType>
+    void scan_list_with_table (size_t ncode, const uint8_t *codes,
+                               SearchResultType & res) const
     {
-        int nup = 0;
         for (size_t j = 0; j < ncode; j++) {
 
             float dis = dis0;
@@ -810,24 +857,17 @@ struct IVFPQScannerT: QueryTables {
                 tab += pq.ksub;
             }
 
-            if (C::cmp (heap_sim[0], dis)) {
-                heap_pop<C> (k, heap_sim, heap_ids);
-                long id = store_pairs ? (key << 32 | j) : ids[j];
-                heap_push<C> (k, heap_sim, heap_ids, dis, id);
-                nup++;
-            }
+            res.add(j, dis);
         }
-        return nup;
     }
 
 
     /// tables are not precomputed, but pointers are provided to the
     /// relevant X_c|x_r tables
-    size_t scan_list_with_pointer (
-             size_t ncode, const uint8_t *codes, const idx_t *ids,
-             size_t k, float * heap_sim, long * heap_ids) const
+    template<class SearchResultType>
+    void scan_list_with_pointer (size_t ncode, const uint8_t *codes,
+                                 SearchResultType & res) const
     {
-        size_t nup = 0;
         for (size_t j = 0; j < ncode; j++) {
 
             float dis = dis0;
@@ -838,26 +878,18 @@ struct IVFPQScannerT: QueryTables {
                 dis += sim_table_ptrs [m][ci] - 2 * tab [ci];
                 tab += pq.ksub;
             }
-
-            if (C::cmp (heap_sim[0], dis)) {
-                heap_pop<C> (k, heap_sim, heap_ids);
-                long id = store_pairs ? (key << 32 | j) : ids[j];
-                heap_push<C> (k, heap_sim, heap_ids, dis, id);
-                nup++;
-            }
+            res.add (j, dis);
         }
-        return nup;
     }
 
 
     /// nothing is precomputed: access residuals on-the-fly
-    size_t scan_on_the_fly_dist (
-             size_t ncode, const uint8_t *codes, const idx_t *ids,
-             size_t k, float * heap_sim, long * heap_ids) const
+    template<class SearchResultType>
+    void scan_on_the_fly_dist (size_t ncode, const uint8_t *codes,
+                                 SearchResultType &res) const
     {
         const float *dvec;
         float dis0 = 0;
-        size_t nup = 0;
         if (by_residual) {
             if (METRIC_TYPE == METRIC_INNER_PRODUCT) {
                 ivfpq.quantizer->reconstruct (key, residual_vec);
@@ -882,25 +914,18 @@ struct IVFPQScannerT: QueryTables {
             } else {
                 dis = fvec_L2sqr (decoded_vec, dvec, d);
             }
-
-            if (C::cmp (heap_sim[0], dis)) {
-                heap_pop<C> (k, heap_sim, heap_ids);
-                long id = store_pairs ? (key << 32 | j) : ids[j];
-                heap_push<C> (k, heap_sim, heap_ids, dis, id);
-                nup++;
-            }
+            res.add (j, dis);
         }
-        return nup;
     }
 
     /*****************************************************
      * Scanning codes with polysemous filtering
      *****************************************************/
 
-    template <class HammingComputer>
-    size_t scan_list_polysemous_hc (
-             size_t ncode, const uint8_t *codes, const idx_t *ids,
-             size_t k, float * heap_sim, long * heap_ids) const
+    template <class HammingComputer, class SearchResultType>
+    void scan_list_polysemous_hc (
+             size_t ncode, const uint8_t *codes,
+             SearchResultType & res) const
     {
         int ht = ivfpq.polysemous_ht;
         size_t n_hamming_pass = 0, nup = 0;
@@ -923,12 +948,7 @@ struct IVFPQScannerT: QueryTables {
                     tab += pq.ksub;
                 }
 
-                if (C::cmp (heap_sim[0], dis)) {
-                    heap_pop<C> (k, heap_sim, heap_ids);
-                    long id = store_pairs ? (key << 32 | j) : ids[j];
-                    heap_push<C> (k, heap_sim, heap_ids, dis, id);
-                    nup++;
-                }
+                res.add (j, dis);
             }
             codes += code_size;
         }
@@ -936,18 +956,19 @@ struct IVFPQScannerT: QueryTables {
         {
             indexIVFPQ_stats.n_hamming_pass += n_hamming_pass;
         }
-        return nup;
     }
 
-    size_t scan_list_polysemous (
-             size_t ncode, const uint8_t *codes, const idx_t *ids,
-             size_t k, float * heap_sim, long * heap_ids) const
+    template<class SearchResultType>
+    void scan_list_polysemous (
+             size_t ncode, const uint8_t *codes,
+             SearchResultType &res) const
     {
         switch (pq.code_size) {
 #define HANDLE_CODE_SIZE(cs)                                            \
         case cs:                                                        \
-            return scan_list_polysemous_hc <HammingComputer ## cs>      \
-                (ncode, codes, ids, k, heap_sim, heap_ids);             \
+            scan_list_polysemous_hc \
+            <HammingComputer ## cs, SearchResultType>   \
+                (ncode, codes, res);             \
             break
         HANDLE_CODE_SIZE(4);
         HANDLE_CODE_SIZE(8);
@@ -958,11 +979,13 @@ struct IVFPQScannerT: QueryTables {
 #undef HANDLE_CODE_SIZE
         default:
             if (pq.code_size % 8 == 0)
-                return scan_list_polysemous_hc <HammingComputerM8>
-                    (ncode, codes, ids, k, heap_sim, heap_ids);
+                scan_list_polysemous_hc
+                    <HammingComputerM8, SearchResultType>
+                    (ncode, codes, res);
             else
-                return scan_list_polysemous_hc <HammingComputerM4>
-                    (ncode, codes, ids, k, heap_sim, heap_ids);
+                scan_list_polysemous_hc
+                    <HammingComputerM4, SearchResultType>
+                    (ncode, codes, res);
             break;
         }
     }
@@ -974,17 +997,18 @@ struct IVFPQScannerT: QueryTables {
  * gain in runtime is worth the code bloat. C is the comparator < or
  * >, it is directly related to METRIC_TYPE. precompute_mode is how
  * much we precompute (2 = precompute distance tables, 1 = precompute
- * pointers to distances, 0 = compute distances one by one). Currently
- * only 2 is supported. */
-template<MetricType METRIC_TYPE, bool store_pairs, class C,
-         int precompute_mode>
+ * pointers to distances, 0 = compute distances one by one).
+ * Currently only 2 is supported */
+template<MetricType METRIC_TYPE, class C, int precompute_mode>
 struct IVFPQScanner:
-    IVFPQScannerT<Index::idx_t, store_pairs, C, METRIC_TYPE>,
+    IVFPQScannerT<Index::idx_t, METRIC_TYPE>,
     InvertedListScanner
 {
+    bool store_pairs;
 
-    IVFPQScanner(const IndexIVFPQ & ivfpq):
-        IVFPQScannerT<Index::idx_t, store_pairs, C, METRIC_TYPE>(ivfpq, nullptr)
+    IVFPQScanner(const IndexIVFPQ & ivfpq, bool store_pairs):
+        IVFPQScannerT<Index::idx_t, METRIC_TYPE>(ivfpq, nullptr),
+        store_pairs(store_pairs)
     {
     }
 
@@ -1014,25 +1038,57 @@ struct IVFPQScanner:
                        float *heap_sim, idx_t *heap_ids,
                        size_t k) const override
     {
+        KnnSearchResults<C> res = {
+            /* key */      this->key,
+            /* ids */      this->store_pairs ? nullptr : ids,
+            /* k */        k,
+            /* heap_sim */ heap_sim,
+            /* heap_ids */ heap_ids,
+            /* nup */      0
+        };
+
         if (this->polysemous_ht > 0) {
             assert(precompute_mode == 2);
-            this->scan_list_polysemous
-                (ncode, codes, ids, k, heap_sim, heap_ids);
+            this->scan_list_polysemous (ncode, codes, res);
         } else if (precompute_mode == 2) {
-            this->scan_list_with_table
-                (ncode, codes, ids, k, heap_sim, heap_ids);
+            this->scan_list_with_table (ncode, codes, res);
         } else if (precompute_mode == 1) {
-            this->scan_list_with_pointer
-                (ncode, codes, ids, k, heap_sim, heap_ids);
+            this->scan_list_with_pointer (ncode, codes, res);
         } else if (precompute_mode == 0) {
-            this->scan_on_the_fly_dist
-                (ncode, codes, ids, k, heap_sim, heap_ids);
+            this->scan_on_the_fly_dist (ncode, codes, res);
         } else {
             FAISS_THROW_MSG("bad precomp mode");
         }
-        return 0;
+        return res.nup;
     }
 
+    void scan_codes_range (size_t ncode,
+                           const uint8_t *codes,
+                           const idx_t *ids,
+                           float radius,
+                           RangeQueryResult & rres) const override
+    {
+        RangeSearchResults<C> res = {
+            /* key */      this->key,
+            /* ids */      this->store_pairs ? nullptr : ids,
+            /* radius */   radius,
+            /* rres */     rres
+        };
+
+        if (this->polysemous_ht > 0) {
+            assert(precompute_mode == 2);
+            this->scan_list_polysemous (ncode, codes, res);
+        } else if (precompute_mode == 2) {
+            this->scan_list_with_table (ncode, codes, res);
+        } else if (precompute_mode == 1) {
+            this->scan_list_with_pointer (ncode, codes, res);
+        } else if (precompute_mode == 0) {
+            this->scan_on_the_fly_dist (ncode, codes, res);
+        } else {
+            FAISS_THROW_MSG("bad precomp mode");
+        }
+
+    }
 };
 
 
@@ -1044,21 +1100,11 @@ InvertedListScanner *
 IndexIVFPQ::get_InvertedListScanner (bool store_pairs) const
 {
     if (metric_type == METRIC_INNER_PRODUCT) {
-        if (store_pairs) {
-            return new IVFPQScanner<
-                METRIC_INNER_PRODUCT, true, CMin<float, long>, 2> (*this);
-        } else {
-            return new IVFPQScanner<
-                METRIC_INNER_PRODUCT, false, CMin<float, long>, 2>(*this);
-        }
+        return new IVFPQScanner<METRIC_INNER_PRODUCT, CMin<float, idx_t>, 2>
+            (*this, store_pairs);
     } else if (metric_type == METRIC_L2) {
-        if (store_pairs) {
-            return new IVFPQScanner<
-                METRIC_L2, true, CMax<float, long>, 2> (*this);
-        } else {
-            return new IVFPQScanner<
-                METRIC_L2, false, CMax<float, long>, 2>(*this);
-        }
+        return new IVFPQScanner<METRIC_L2, CMax<float, idx_t>, 2>
+            (*this, store_pairs);
     }
     return nullptr;
 
@@ -1184,12 +1230,12 @@ void IndexIVFPQR::train_residual (idx_t n, const float *x)
 }
 
 
-void IndexIVFPQR::add_with_ids (idx_t n, const float *x, const long *xids) {
+void IndexIVFPQR::add_with_ids (idx_t n, const float *x, const idx_t *xids) {
     add_core (n, x, xids, nullptr);
 }
 
-void IndexIVFPQR::add_core (idx_t n, const float *x, const long *xids,
-                                const long *precomputed_idx) {
+void IndexIVFPQR::add_core (idx_t n, const float *x, const idx_t *xids,
+                                const idx_t *precomputed_idx) {
 
     float * residual_2 = new float [n * d];
     ScopeDeleter <float> del(residual_2);
@@ -1246,13 +1292,13 @@ void IndexIVFPQR::search_preassigned (idx_t n, const float *x, idx_t k,
 #pragma omp for
         for (idx_t i = 0; i < n; i++) {
             const float *xq = x + i * d;
-            const long * shortlist = coarse_labels + k_coarse * i;
+            const idx_t * shortlist = coarse_labels + k_coarse * i;
             float * heap_sim = distances + k * i;
-            long * heap_ids = labels + k * i;
+            idx_t * heap_ids = labels + k * i;
             maxheap_heapify (k, heap_sim, heap_ids);
 
             for (int j = 0; j < k_coarse; j++) {
-                long sl = shortlist[j];
+                idx_t sl = shortlist[j];
 
                 if (sl == -1) continue;
 
@@ -1283,7 +1329,7 @@ void IndexIVFPQR::search_preassigned (idx_t n, const float *x, idx_t k,
 
                 if (dis < heap_sim[0]) {
                     maxheap_pop (k, heap_sim, heap_ids);
-                    long id_or_pair = store_pairs ? sl : id;
+                    idx_t id_or_pair = store_pairs ? sl : id;
                     maxheap_push (k, heap_sim, heap_ids, dis, id_or_pair);
                 }
                 n_refine ++;
@@ -1295,7 +1341,7 @@ void IndexIVFPQR::search_preassigned (idx_t n, const float *x, idx_t k,
     indexIVFPQ_stats.refine_cycles += TOC;
 }
 
-void IndexIVFPQR::reconstruct_from_offset (long list_no, long offset,
+void IndexIVFPQR::reconstruct_from_offset (int64_t list_no, int64_t offset,
                                            float* recons) const
 {
     IndexIVFPQ::reconstruct_from_offset (list_no, offset, recons);
@@ -1323,7 +1369,7 @@ void IndexIVFPQR::merge_from (IndexIVF &other_in, idx_t add_id)
     other->refine_codes.clear();
 }
 
-long IndexIVFPQR::remove_ids(const IDSelector& /*sel*/) {
+size_t IndexIVFPQR::remove_ids(const IDSelector& /*sel*/) {
   FAISS_THROW_MSG("not implemented");
   return 0;
 }
@@ -1506,6 +1552,163 @@ void Index2Layer::reset()
 {
     ntotal = 0;
     codes.clear ();
+}
+
+
+namespace {
+
+
+struct Distance2Level : DistanceComputer {
+    size_t d;
+    const Index2Layer& storage;
+    std::vector<float> buf;
+    const float *q;
+
+    const float *pq_l1_tab, *pq_l2_tab;
+
+    explicit Distance2Level(const Index2Layer& storage)
+        : storage(storage) {
+        d = storage.d;
+        FAISS_ASSERT(storage.pq.dsub == 4);
+        pq_l2_tab = storage.pq.centroids.data();
+        buf.resize(2 * d);
+    }
+
+    float symmetric_dis(idx_t i, idx_t j) override {
+        storage.reconstruct(i, buf.data());
+        storage.reconstruct(j, buf.data() + d);
+        return fvec_L2sqr(buf.data() + d, buf.data(), d);
+    }
+
+    void set_query(const float *x) override {
+        q = x;
+    }
+};
+
+// well optimized for xNN+PQNN
+struct DistanceXPQ4 : Distance2Level {
+
+    int M, k;
+
+    explicit DistanceXPQ4(const Index2Layer& storage)
+        : Distance2Level (storage) {
+        const IndexFlat *quantizer =
+            dynamic_cast<IndexFlat*> (storage.q1.quantizer);
+
+        FAISS_ASSERT(quantizer);
+        M = storage.pq.M;
+        pq_l1_tab = quantizer->xb.data();
+    }
+
+    float operator () (idx_t i) override {
+#ifdef __SSE__
+        const uint8_t *code = storage.codes.data() + i * storage.code_size;
+        long key = 0;
+        memcpy (&key, code, storage.code_size_1);
+        code += storage.code_size_1;
+
+        // walking pointers
+        const float *qa = q;
+        const __m128 *l1_t = (const __m128 *)(pq_l1_tab + d * key);
+        const __m128 *pq_l2_t = (const __m128 *)pq_l2_tab;
+        __m128 accu = _mm_setzero_ps();
+
+        for (int m = 0; m < M; m++) {
+            __m128 qi = _mm_loadu_ps(qa);
+            __m128 recons = l1_t[m] + pq_l2_t[*code++];
+            __m128 diff = qi - recons;
+            accu += diff * diff;
+            pq_l2_t += 256;
+            qa += 4;
+        }
+
+        accu = _mm_hadd_ps (accu, accu);
+        accu = _mm_hadd_ps (accu, accu);
+        return  _mm_cvtss_f32 (accu);
+#else
+        FAISS_THROW_MSG("not implemented for non-x64 platforms");
+#endif
+    }
+
+};
+
+// well optimized for 2xNN+PQNN
+struct Distance2xXPQ4 : Distance2Level {
+
+    int M_2, mi_nbits;
+
+    explicit Distance2xXPQ4(const Index2Layer& storage)
+        : Distance2Level(storage) {
+        const MultiIndexQuantizer *mi =
+            dynamic_cast<MultiIndexQuantizer*> (storage.q1.quantizer);
+
+        FAISS_ASSERT(mi);
+        FAISS_ASSERT(storage.pq.M % 2 == 0);
+        M_2 = storage.pq.M / 2;
+        mi_nbits = mi->pq.nbits;
+        pq_l1_tab = mi->pq.centroids.data();
+    }
+
+    float operator () (idx_t i) override {
+        const uint8_t *code = storage.codes.data() + i * storage.code_size;
+        long key01 = 0;
+        memcpy (&key01, code, storage.code_size_1);
+        code += storage.code_size_1;
+#ifdef __SSE__
+
+        // walking pointers
+        const float *qa = q;
+        const __m128 *pq_l1_t = (const __m128 *)pq_l1_tab;
+        const __m128 *pq_l2_t = (const __m128 *)pq_l2_tab;
+        __m128 accu = _mm_setzero_ps();
+
+        for (int mi_m = 0; mi_m < 2; mi_m++) {
+            long l1_idx = key01 & ((1L << mi_nbits) - 1);
+            const __m128 * pq_l1 = pq_l1_t + M_2 * l1_idx;
+
+            for (int m = 0; m < M_2; m++) {
+                __m128 qi = _mm_loadu_ps(qa);
+                __m128 recons = pq_l1[m] + pq_l2_t[*code++];
+                __m128 diff = qi - recons;
+                accu += diff * diff;
+                pq_l2_t += 256;
+                qa += 4;
+            }
+            pq_l1_t += M_2 << mi_nbits;
+            key01 >>= mi_nbits;
+        }
+        accu = _mm_hadd_ps (accu, accu);
+        accu = _mm_hadd_ps (accu, accu);
+        return  _mm_cvtss_f32 (accu);
+#else
+        FAISS_THROW_MSG("not implemented for non-x64 platforms");
+#endif
+    }
+
+};
+
+
+}  // namespace
+
+
+DistanceComputer * Index2Layer::get_distance_computer() const {
+#ifdef __SSE__
+    const MultiIndexQuantizer *mi =
+        dynamic_cast<MultiIndexQuantizer*> (q1.quantizer);
+
+    if (mi && pq.M % 2 == 0 && pq.dsub == 4) {
+        return new Distance2xXPQ4(*this);
+    }
+
+    const IndexFlat *fl =
+        dynamic_cast<IndexFlat*> (q1.quantizer);
+
+    if (fl && pq.dsub == 4) {
+        return new DistanceXPQ4(*this);
+    }
+#endif
+
+    return Index::get_distance_computer();
 }
 
 

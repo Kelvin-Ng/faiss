@@ -1,8 +1,7 @@
 /**
- * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD+Patents license found in the
+ * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
 
@@ -91,7 +90,7 @@ void make_index_slices (const Index* trained_index,
         Index * index = sub_indexes.back().get();
 
         auto xb = make_data(nb * d);
-        std::vector<long> ids (nb);
+        std::vector<faiss::Index::idx_t> ids (nb);
         for (int j = 0; j < nb; j++) {
             ids[j] = lrand48();
         }

@@ -40,10 +40,11 @@ void SimpleIMI::query(const Tensor<float, 2, true>& deviceQueries,
         // TODO: check if it is really sorted
         // TODO: support inner product
         runL2Distance(resources_,
-                      deviceCentroidsView,
-                      nullptr,
+                      deviceCentroidsView, // TODO: store the transposed version
+                      true,
                       nullptr, // compute norms in temp memory. TODO: can store it because it does not consume much memory
-                      deviceQueriesView,
+                      deviceQueriesView, // TODO:
+                      true,
                       nprobeSideLen,
                       deviceOutDistancesView,
                       deviceOutIndicesView);

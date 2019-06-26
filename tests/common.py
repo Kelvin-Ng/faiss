@@ -1,7 +1,6 @@
-# Copyright (c) 2015-present, Facebook, Inc.
-# All rights reserved.
+# Copyright (c) Facebook, Inc. and its affiliates.
 #
-# This source code is licensed under the BSD+Patents license found in the
+# This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
 #! /usr/bin/env python2
@@ -63,8 +62,11 @@ class Randu10kUnbalanced(Randu10k):
         rs = np.random.RandomState(123)
         weights = weights[rs.permutation(self.d)]
         self.xb *= weights
+        self.xb /= np.linalg.norm(self.xb, axis=1)[:, np.newaxis]
         self.xq *= weights
+        self.xq /= np.linalg.norm(self.xq, axis=1)[:, np.newaxis]
         self.xt *= weights
+        self.xt /= np.linalg.norm(self.xt, axis=1)[:, np.newaxis]
 
         dotprods = np.dot(self.xq, self.xb.T)
         self.gt = dotprods.argmax(1)

@@ -1,8 +1,7 @@
 /**
- * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD+Patents license found in the
+ * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
 
@@ -48,7 +47,7 @@ struct IndexBinaryIVF : IndexBinary {
 
     /// map for direct access to the elements. Enables reconstruct().
     bool maintain_direct_map;
-    std::vector<long> direct_map;
+    std::vector<idx_t> direct_map;
 
     IndexBinary *quantizer;   ///< quantizer that maps vectors to inverted lists
     size_t nlist;             ///< number of possible key values
@@ -57,9 +56,6 @@ struct IndexBinaryIVF : IndexBinary {
 
     ClusteringParameters cp; ///< to override default clustering params
     Index *clustering_index; ///< to override index used during clustering
-
-    /// Trains the quantizer and calls train_residual to train sub-quantizers
-    void train_q1(size_t n, const uint8_t *x, bool verbose);
 
     /** The Inverted file takes a quantizer (an IndexBinary) on input,
      * which implements the function mapping a vector to a list
@@ -74,17 +70,16 @@ struct IndexBinaryIVF : IndexBinary {
 
     void reset() override;
 
-    /// Trains the quantizer and calls train_residual to train sub-quantizers
+    /// Trains the quantizer
     void train(idx_t n, const uint8_t *x) override;
 
-    /// Quantizes x and calls add_with_key
     void add(idx_t n, const uint8_t *x) override;
 
-    void add_with_ids(idx_t n, const uint8_t *x, const long *xids) override;
+    void add_with_ids(idx_t n, const uint8_t *x, const idx_t *xids) override;
 
     /// same as add_with_ids, with precomputed coarse quantizer
-    void add_core (idx_t n, const uint8_t * x, const long *xids,
-                   const long *precomputed_idx);
+    void add_core (idx_t n, const uint8_t * x, const idx_t *xids,
+                   const idx_t *precomputed_idx);
 
     /** Search a set of vectors, that are pre-quantized by the IVF
      *  quantizer. Fill in the corresponding heaps with the query
@@ -151,13 +146,12 @@ struct IndexBinaryIVF : IndexBinary {
      * the inv list offset is computed by search_preassigned() with
      * `store_pairs` set.
      */
-    virtual void reconstruct_from_offset(long list_no, long offset,
+    virtual void reconstruct_from_offset(idx_t list_no, idx_t offset,
                                          uint8_t* recons) const;
 
 
     /// Dataset manipulation functions
-
-    long remove_ids(const IDSelector& sel) override;
+    size_t remove_ids(const IDSelector& sel) override;
 
     /** moves the entries from another dataset to self. On output,
      * other is empty. add_id is added to all moved ids (for
@@ -173,12 +167,6 @@ struct IndexBinaryIVF : IndexBinary {
      *                                   else clear it
      */
     void make_direct_map(bool new_maintain_direct_map=true);
-
-    /// 1= perfectly balanced, >1: imbalanced
-    double imbalance_factor() const;
-
-    /// display some stats about the inverted lists
-    void print_stats() const;
 
     void replace_invlists(InvertedLists *il, bool own=false);
 };

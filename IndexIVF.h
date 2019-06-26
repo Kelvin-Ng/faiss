@@ -1,8 +1,7 @@
 /**
- * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD+Patents license found in the
+ * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
 
@@ -13,7 +12,7 @@
 
 
 #include <vector>
-
+#include <stdint.h>
 
 #include "Index.h"
 #include "InvertedLists.h"
@@ -98,9 +97,17 @@ struct IndexIVF: Index, Level1Quantizer {
     size_t nprobe;            ///< number of probes at query time
     size_t max_codes;         ///< max nb of codes to visit to do a query
 
+    /** Parallel mode determines how queries are parallelized with OpenMP
+     *
+     * 0 (default): parallelize over queries
+     * 1: parallelize over over inverted lists
+     * 2: parallelize over both
+     */
+    int parallel_mode;
+
     /// map for direct access to the elements. Enables reconstruct().
     bool maintain_direct_map;
-    std::vector <long> direct_map;
+    std::vector <idx_t> direct_map;
 
     /** The Inverted file takes a quantizer (an Index) on input,
      * which implements the function mapping a vector to a list
@@ -118,6 +125,9 @@ struct IndexIVF: Index, Level1Quantizer {
 
     /// Calls add_with_ids with NULL ids
     void add(idx_t n, const float* x) override;
+
+    /// default implementation that calls encode_vectors
+    void add_with_ids(idx_t n, const float* x, const idx_t* xids) override;
 
     /** Encodes a set of vectors as they would appear in the inverted lists
      *
@@ -160,14 +170,19 @@ struct IndexIVF: Index, Level1Quantizer {
                                      ) const;
 
     /** assign the vectors, then call search_preassign */
-    virtual void search (idx_t n, const float *x, idx_t k,
-                         float *distances, idx_t *labels) const override;
+    void search (idx_t n, const float *x, idx_t k,
+                 float *distances, idx_t *labels) const override;
+
+    void range_search (idx_t n, const float* x, float radius,
+                       RangeSearchResult* result) const override;
+
+    void range_search_preassigned(idx_t nx, const float *x, float radius,
+                                  const idx_t *keys, const float *coarse_dis,
+                                  RangeSearchResult *result) const;
 
     /// get a scanner for this index (store_pairs means ignore labels)
     virtual InvertedListScanner *get_InvertedListScanner (
-                 bool store_pairs=false) const {
-        return nullptr;
-    }
+        bool store_pairs=false) const;
 
     void reconstruct (idx_t key, float* recons) const override;
 
@@ -202,13 +217,13 @@ struct IndexIVF: Index, Level1Quantizer {
      * the inv list offset is computed by search_preassigned() with
      * `store_pairs` set.
      */
-    virtual void reconstruct_from_offset (long list_no, long offset,
+    virtual void reconstruct_from_offset (int64_t list_no, int64_t offset,
                                           float* recons) const;
 
 
     /// Dataset manipulation functions
 
-    long remove_ids(const IDSelector& sel) override;
+    size_t remove_ids(const IDSelector& sel) override;
 
     /** check that the two indexes are compatible (ie, they are
      * trained in the same way and have the same
@@ -228,7 +243,7 @@ struct IndexIVF: Index, Level1Quantizer {
      *                      elements are left before and a2 elements are after
      */
     virtual void copy_subset_to (IndexIVF & other, int subset_type,
-                                 long a1, long a2) const;
+                                 idx_t a1, idx_t a2) const;
 
     ~IndexIVF() override;
 
@@ -242,17 +257,13 @@ struct IndexIVF: Index, Level1Quantizer {
      */
     void make_direct_map (bool new_maintain_direct_map=true);
 
-    /// 1= perfectly balanced, >1: imbalanced
-    double imbalance_factor () const;
-
-    /// display some stats about the inverted lists
-    void print_stats () const;
-
     /// replace the inverted lists, old one is deallocated if own_invlists
     void replace_invlists (InvertedLists *il, bool own=false);
 
     IndexIVF ();
 };
+
+struct RangeQueryResult;
 
 /** Object that handles a query. The inverted lists to scan are
  * provided externally. The object has a lot of state, but
@@ -271,8 +282,8 @@ struct InvertedListScanner {
     /// compute a single query-to-code distance
     virtual float distance_to_code (const uint8_t *code) const = 0;
 
-    /** compute the distances to codes. (distances, labels) should be
-     * organized ad a min- or max-heap
+    /** scan a set of codes, compute distances to current query and
+     * update heap of results if necessary.
      *
      * @param n      number of codes to scan
      * @param codes  codes to scan (n * code_size)
@@ -280,12 +291,23 @@ struct InvertedListScanner {
      * @param distances  heap distances (size k)
      * @param labels     heap labels (size k)
      * @param k          heap size
+     * @return number of heap updates performed
      */
     virtual size_t scan_codes (size_t n,
                                const uint8_t *codes,
                                const idx_t *ids,
                                float *distances, idx_t *labels,
                                size_t k) const = 0;
+
+    /** scan a set of codes, compute distances to current query and
+     * update results if distances are below radius
+     *
+     * (default implementation fails) */
+    virtual void scan_codes_range (size_t n,
+                                   const uint8_t *codes,
+                                   const idx_t *ids,
+                                   float radius,
+                                   RangeQueryResult &result) const;
 
     virtual ~InvertedListScanner () {}
 

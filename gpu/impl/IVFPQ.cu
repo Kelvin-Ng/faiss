@@ -1,8 +1,7 @@
 /**
- * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD+Patents license found in the
+ * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
 
@@ -187,9 +186,10 @@ IVFPQ::classifyAndAddVectors(Tensor<float, 2, true>& vecs,
 
     runL2Distance(resources_,
                   pqCentroidsMiddleCodeView,
-                  nullptr, // no transposed storage
+                  true, // pqCentroidsMiddleCodeView is row major
                   nullptr, // no precomputed norms
                   residualsTransposeView,
+                  true, // residualsTransposeView is row major
                   1,
                   closestSubQDistanceView,
                   closestSubQIndexView,
@@ -449,7 +449,8 @@ IVFPQ::precomputeCodes_() {
   DeviceTensor<float, 1, true> subQuantizerNorms(
     {numSubQuantizers_ * numSubQuantizerCodes_});
 
-  runL2Norm(pqCentroidsMiddleCodeView, subQuantizerNorms, true,
+  runL2Norm(pqCentroidsMiddleCodeView, true,
+            subQuantizerNorms, true,
             resources_->getDefaultStreamCurrentDevice());
 
   // Compute 2 * (y_C|y_R) via batch matrix multiplication
@@ -517,9 +518,9 @@ IVFPQ::query(Tensor<float, 2, true>& queries,
              int k,
              Tensor<float, 2, true>& outDistances,
              Tensor<long, 2, true>& outIndices) {
-  // Validate these at a top level
-  FAISS_ASSERT(nprobe <= 1024);
-  FAISS_ASSERT(k <= 1024);
+  // These are caught at a higher level
+  FAISS_ASSERT(nprobe <= GPU_MAX_SELECTION_K);
+  FAISS_ASSERT(k <= GPU_MAX_SELECTION_K);
 
   auto& mem = resources_->getMemoryManagerCurrentDevice();
   auto stream = resources_->getDefaultStreamCurrentDevice();

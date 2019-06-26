@@ -1,7 +1,6 @@
-# Copyright (c) 2015-present, Facebook, Inc.
-# All rights reserved.
+# Copyright (c) Facebook, Inc. and its affiliates.
 #
-# This source code is licensed under the BSD+Patents license found in the
+# This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
 .SUFFIXES: .cpp .o
@@ -16,6 +15,8 @@ CLIBNAME=libgpufaiss_c
 LIBGPUCOBJ=GpuAutoTune_c.o GpuClonerOptions_c.o GpuIndex_c.o GpuResources_c.o \
 	StandardGpuResources_c.o
 LIBCOBJ=../libfaiss_c.a
+CFLAGS=-fPIC -m64 -Wno-sign-compare -g -O3 -Wall -Wextra
+CUDACFLAGS=-I$(CUDA_ROOT)/include
 
 # Build shared object file by default
 all: $(CLIBNAME).$(SHAREDEXT)
@@ -35,11 +36,14 @@ $(CLIBNAME).$(SHAREDEXT): $(LIBCOBJ) $(LIBGPUCOBJ) ../../libfaiss.a ../../gpu/$(
 
 # Build GPU example
 bin/example_gpu_c: example_gpu_c.c $(CLIBNAME).$(SHAREDEXT)
-	$(CC) $(CFLAGS) $(CUDACFLAGS) -std=c99 -I. -I.. -o $@ example_gpu_c.c \
+	$(CC) $(CFLAGS) $(CUDACFLAGS) $(NVCCLIBS) -std=c99 -I. -I.. -o $@ example_gpu_c.c \
 	-L. -lgpufaiss_c 
 
 clean:
 	rm -f $(CLIBNAME).a $(CLIBNAME).$(SHAREDEXT)* *.o bin/example_gpu_c
+
+%.o: %.cpp
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) $(CPUFLAGS) -c $< -o $@
 
 # Dependencies
 

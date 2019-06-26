@@ -1,8 +1,7 @@
 /**
- * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD+Patents license found in the
+ * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
 
@@ -62,7 +61,7 @@ void compareBinaryDist(const std::vector<int>& cpuDist,
 }
 
 template <int DimMultiple>
-void testGpuIndexBinaryFlat() {
+void testGpuIndexBinaryFlat(int kOverride = -1) {
   faiss::gpu::StandardGpuResources res;
   res.noTempMemory();
 
@@ -75,9 +74,10 @@ void testGpuIndexBinaryFlat() {
 
   faiss::IndexBinaryFlat cpuIndex(dims);
 
-  int numVecs = faiss::gpu::randVal(1, 20000);
+  int k = kOverride > 0 ?
+    kOverride : faiss::gpu::randVal(1, faiss::gpu::getMaxKSelection());
+  int numVecs = faiss::gpu::randVal(k + 1, 20000);
   int numQuery = faiss::gpu::randVal(1, 1000);
-  int k = faiss::gpu::randVal(1, 1024);
 
   auto data = faiss::gpu::randBinaryVecs(numVecs, dims);
   gpuIndex.add(numVecs, data.data());

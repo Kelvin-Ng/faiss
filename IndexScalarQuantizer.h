@@ -1,8 +1,7 @@
 /**
- * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD+Patents license found in the
+ * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
 
@@ -28,6 +27,7 @@ namespace faiss {
  * (default).
  */
 
+struct SQDistanceComputer;
 
 struct ScalarQuantizer {
 
@@ -37,6 +37,8 @@ struct ScalarQuantizer {
         QT_8bit_uniform,     ///< same, shared range for all dimensions
         QT_4bit_uniform,
         QT_fp16,
+        QT_8bit_direct,      /// fast indexing of uint8s
+        QT_6bit,             ///< 6 bits per component
     };
 
     QuantizerType qtype;
@@ -79,25 +81,13 @@ struct ScalarQuantizer {
     /// decode a vector from a given code (or n vectors if third argument)
     void decode (const uint8_t *code, float *x, size_t n) const;
 
-    // fast, non thread-safe way of computing vector-to-code and
-    // code-to-code distances.
-    struct DistanceComputer {
 
-        /// vector-to-code distance computation
-        virtual float compute_distance (const float *x,
-                                        const uint8_t *code) const = 0;
-
-        /// code-to-code distance computation
-        virtual float compute_code_distance (const uint8_t *code1,
-                                             const uint8_t *code2) const = 0;
-        virtual ~DistanceComputer () {}
-    };
-
-    DistanceComputer *get_distance_computer (MetricType metric = METRIC_L2)
+    SQDistanceComputer *get_distance_computer (MetricType metric = METRIC_L2)
         const;
 
 };
 
+struct DistanceComputer;
 
 struct IndexScalarQuantizer: Index {
     /// Used to encode the vectors
@@ -137,6 +127,8 @@ struct IndexScalarQuantizer: Index {
 
     void reconstruct(idx_t key, float* recons) const override;
 
+    DistanceComputer *get_distance_computer () const override;
+
 };
 
 
@@ -148,6 +140,7 @@ struct IndexScalarQuantizer: Index {
 
 struct IndexIVFScalarQuantizer: IndexIVF {
     ScalarQuantizer sq;
+    bool by_residual;
 
     IndexIVFScalarQuantizer(Index *quantizer, size_t d, size_t nlist,
                             ScalarQuantizer::QuantizerType qtype,
@@ -161,13 +154,13 @@ struct IndexIVFScalarQuantizer: IndexIVF {
                         const idx_t *list_nos,
                         uint8_t * codes) const override;
 
-    void add_with_ids(idx_t n, const float* x, const long* xids) override;
+    void add_with_ids(idx_t n, const float* x, const idx_t* xids) override;
 
     InvertedListScanner *get_InvertedListScanner (bool store_pairs)
         const override;
 
 
-    void reconstruct_from_offset (long list_no, long offset,
+    void reconstruct_from_offset (int64_t list_no, int64_t offset,
                                   float* recons) const override;
 
 };

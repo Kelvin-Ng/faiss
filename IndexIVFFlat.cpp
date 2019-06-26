@@ -1,8 +1,7 @@
 /**
- * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD+Patents license found in the
+ * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
 
@@ -34,34 +33,34 @@ IndexIVFFlat::IndexIVFFlat (Index * quantizer,
 }
 
 
-void IndexIVFFlat::add_with_ids (idx_t n, const float * x, const long *xids)
+void IndexIVFFlat::add_with_ids (idx_t n, const float * x, const idx_t *xids)
 {
     add_core (n, x, xids, nullptr);
 }
 
-void IndexIVFFlat::add_core (idx_t n, const float * x, const long *xids,
-                             const long *precomputed_idx)
+void IndexIVFFlat::add_core (idx_t n, const float * x, const int64_t *xids,
+                             const int64_t *precomputed_idx)
 
 {
     FAISS_THROW_IF_NOT (is_trained);
     assert (invlists);
     FAISS_THROW_IF_NOT_MSG (!(maintain_direct_map && xids),
                             "cannot have direct map and add with ids");
-    const long * idx;
-    ScopeDeleter<long> del;
+    const int64_t * idx;
+    ScopeDeleter<int64_t> del;
 
     if (precomputed_idx) {
         idx = precomputed_idx;
     } else {
-        long * idx0 = new long [n];
+        int64_t * idx0 = new int64_t [n];
         del.set (idx0);
         quantizer->assign (n, x, idx0);
         idx = idx0;
     }
-    long n_add = 0;
+    int64_t n_add = 0;
     for (size_t i = 0; i < n; i++) {
-        long id = xids ? xids[i] : ntotal + i;
-        long list_no = idx [i];
+        int64_t id = xids ? xids[i] : ntotal + i;
+        int64_t list_no = idx [i];
 
         if (list_no < 0)
             continue;
@@ -92,11 +91,13 @@ void IndexIVFFlat::encode_vectors(idx_t n, const float* x,
 namespace {
 
 
-template<MetricType metric, bool store_pairs, class C>
+template<MetricType metric, class C>
 struct IVFFlatScanner: InvertedListScanner {
-
     size_t d;
-    IVFFlatScanner(size_t d): d(d) {}
+    bool store_pairs;
+
+    IVFFlatScanner(size_t d, bool store_pairs):
+        d(d), store_pairs(store_pairs) {}
 
     const float *xi;
     void set_query (const float *query) override {
@@ -129,13 +130,32 @@ struct IVFFlatScanner: InvertedListScanner {
                 fvec_inner_product (xi, yj, d) : fvec_L2sqr (xi, yj, d);
             if (C::cmp (simi[0], dis)) {
                 heap_pop<C> (k, simi, idxi);
-                long id = store_pairs ? (list_no << 32 | j) : ids[j];
+                int64_t id = store_pairs ? (list_no << 32 | j) : ids[j];
                 heap_push<C> (k, simi, idxi, dis, id);
                 nup++;
             }
         }
         return nup;
     }
+
+    void scan_codes_range (size_t list_size,
+                           const uint8_t *codes,
+                           const idx_t *ids,
+                           float radius,
+                           RangeQueryResult & res) const override
+    {
+        const float *list_vecs = (const float*)codes;
+        for (size_t j = 0; j < list_size; j++) {
+            const float * yj = list_vecs + d * j;
+            float dis = metric == METRIC_INNER_PRODUCT ?
+                fvec_inner_product (xi, yj, d) : fvec_L2sqr (xi, yj, d);
+            if (C::cmp (radius, dis)) {
+                int64_t id = store_pairs ? (list_no << 32 | j) : ids[j];
+                res.add (dis, id);
+            }
+        }
+    }
+
 
 };
 
@@ -148,77 +168,18 @@ InvertedListScanner* IndexIVFFlat::get_InvertedListScanner
      (bool store_pairs) const
 {
     if (metric_type == METRIC_INNER_PRODUCT) {
-        if (store_pairs) {
-            return new IVFFlatScanner<
-                METRIC_INNER_PRODUCT, true, CMin<float, long> > (d);
-        } else {
-            return new IVFFlatScanner<
-                METRIC_INNER_PRODUCT, false, CMin<float, long> >(d);
-        }
+        return new IVFFlatScanner<
+            METRIC_INNER_PRODUCT, CMin<float, int64_t> > (d, store_pairs);
     } else if (metric_type == METRIC_L2) {
-        if (store_pairs) {
-            return new IVFFlatScanner<
-                METRIC_L2, true, CMax<float, long> > (d);
-        } else {
-            return new IVFFlatScanner<
-                METRIC_L2, false, CMax<float, long> >(d);
-        }
+        return new IVFFlatScanner<
+            METRIC_L2, CMax<float, int64_t> >(d, store_pairs);
+    } else {
+        FAISS_THROW_MSG("metric type not supported");
     }
     return nullptr;
 }
 
 
-void IndexIVFFlat::range_search (idx_t nx, const float *x, float radius,
-                                 RangeSearchResult *result) const
-{
-    idx_t * keys = new idx_t [nx * nprobe];
-    ScopeDeleter<idx_t> del (keys);
-    quantizer->assign (nx, x, keys, nprobe);
-
-#pragma omp parallel
-    {
-        RangeSearchPartialResult pres(result);
-
-        for (size_t i = 0; i < nx; i++) {
-            const float * xi = x + i * d;
-            const long * keysi = keys + i * nprobe;
-
-            RangeSearchPartialResult::QueryResult & qres =
-                pres.new_result (i);
-
-            for (size_t ik = 0; ik < nprobe; ik++) {
-                long key = keysi[ik];  /* select the list  */
-                if (key < 0 || key >= (long) nlist) {
-                    fprintf (stderr, "Invalid key=%ld  at ik=%ld nlist=%ld\n",
-                             key, ik, nlist);
-                    throw;
-                }
-
-                const size_t list_size = invlists->list_size(key);
-                InvertedLists::ScopedCodes scodes (invlists, key);
-                const float * list_vecs = (const float*)scodes.get();
-                InvertedLists::ScopedIds ids (invlists, key);
-
-                for (size_t j = 0; j < list_size; j++) {
-                    const float * yj = list_vecs + d * j;
-                    if (metric_type == METRIC_L2) {
-                        float disij = fvec_L2sqr (xi, yj, d);
-                        if (disij < radius) {
-                            qres.add (disij, ids[j]);
-                        }
-                    } else if (metric_type == METRIC_INNER_PRODUCT) {
-                        float disij = fvec_inner_product(xi, yj, d);
-                        if (disij > radius) {
-                            qres.add (disij, ids[j]);
-                        }
-                    }
-                }
-            }
-        }
-
-        pres.finalize ();
-    }
-}
 
 void IndexIVFFlat::update_vectors (int n, idx_t *new_ids, const float *x)
 {
@@ -233,12 +194,12 @@ void IndexIVFFlat::update_vectors (int n, idx_t *new_ids, const float *x)
         FAISS_THROW_IF_NOT_MSG (0 <= id && id < ntotal,
                                 "id to update out of range");
         { // remove old one
-            long dm = direct_map[id];
-            long ofs = dm & 0xffffffff;
-            long il = dm >> 32;
+            int64_t dm = direct_map[id];
+            int64_t ofs = dm & 0xffffffff;
+            int64_t il = dm >> 32;
             size_t l = invlists->list_size (il);
             if (ofs != l - 1) { // move l - 1 to ofs
-                long id2 = invlists->get_single_id (il, l - 1);
+                int64_t id2 = invlists->get_single_id (il, l - 1);
                 direct_map[id2] = (il << 32) | ofs;
                 invlists->update_entry (il, ofs, id2,
                                         invlists->get_single_code (il, l - 1));
@@ -246,9 +207,9 @@ void IndexIVFFlat::update_vectors (int n, idx_t *new_ids, const float *x)
             invlists->resize (il, l - 1);
         }
         { // insert new one
-            long il = assign[i];
+            int64_t il = assign[i];
             size_t l = invlists->list_size (il);
-            long dm = (il << 32) | l;
+            int64_t dm = (il << 32) | l;
             direct_map[id] = dm;
             invlists->add_entry (il, id, (const uint8_t*)(x + i * d));
         }
@@ -256,7 +217,7 @@ void IndexIVFFlat::update_vectors (int n, idx_t *new_ids, const float *x)
 
 }
 
-void IndexIVFFlat::reconstruct_from_offset (long list_no, long offset,
+void IndexIVFFlat::reconstruct_from_offset (int64_t list_no, int64_t offset,
                                             float* recons) const
 {
     memcpy (recons, invlists->get_single_code (list_no, offset), code_size);
@@ -272,18 +233,6 @@ IndexIVFFlatDedup::IndexIVFFlatDedup (
     IndexIVFFlat (quantizer, d, nlist_, metric_type)
 {}
 
-// from Python's stringobject.c
-static uint64_t hash_bytes (const uint8_t *bytes, long n) {
-    const uint8_t *p = bytes;
-    uint64_t x = (uint64_t)(*p) << 7;
-    long len = n;
-    while (--len >= 0) {
-        x = (1000003*x) ^ *p++;
-    }
-    x ^= n;
-    return x;
-}
-
 
 void IndexIVFFlatDedup::train(idx_t n, const float* x)
 {
@@ -291,8 +240,8 @@ void IndexIVFFlatDedup::train(idx_t n, const float* x)
     float * x2 = new float [n * d];
     ScopeDeleter<float> del (x2);
 
-    long n2 = 0;
-    for (long i = 0; i < n; i++) {
+    int64_t n2 = 0;
+    for (int64_t i = 0; i < n; i++) {
         uint64_t hash = hash_bytes((uint8_t *)(x + i * d), code_size);
         if (map.count(hash) &&
             !memcmp (x2 + map[hash] * d, x + i * d, code_size)) {
@@ -313,7 +262,7 @@ void IndexIVFFlatDedup::train(idx_t n, const float* x)
 
 
 void IndexIVFFlatDedup::add_with_ids(
-           idx_t na, const float* x, const long* xids)
+           idx_t na, const float* x, const idx_t* xids)
 {
 
     FAISS_THROW_IF_NOT (is_trained);
@@ -321,15 +270,15 @@ void IndexIVFFlatDedup::add_with_ids(
     FAISS_THROW_IF_NOT_MSG (
            !maintain_direct_map,
            "IVFFlatDedup not implemented with direct_map");
-    long * idx = new long [na];
-    ScopeDeleter<long> del (idx);
+    int64_t * idx = new int64_t [na];
+    ScopeDeleter<int64_t> del (idx);
     quantizer->assign (na, x, idx);
 
-    long n_add = 0, n_dup = 0;
+    int64_t n_add = 0, n_dup = 0;
     // TODO make a omp loop with this
     for (size_t i = 0; i < na; i++) {
         idx_t id = xids ? xids[i] : ntotal + i;
-        long list_no = idx [i];
+        int64_t list_no = idx [i];
 
         if (list_no < 0) {
             continue;
@@ -339,9 +288,9 @@ void IndexIVFFlatDedup::add_with_ids(
         // search if there is already an entry with that id
         InvertedLists::ScopedCodes codes (invlists, list_no);
 
-        long n = invlists->list_size (list_no);
-        long offset = -1;
-        for (long o = 0; o < n; o++) {
+        int64_t n = invlists->list_size (list_no);
+        int64_t offset = -1;
+        for (int64_t o = 0; o < n; o++) {
             if (!memcmp (codes.get() + o * code_size,
                          xi, code_size)) {
                 offset = o;
@@ -386,10 +335,10 @@ void IndexIVFFlatDedup::search_preassigned (
     std::vector <idx_t> labels2 (k);
     std::vector <float> dis2 (k);
 
-    for (long i = 0; i < n; i++) {
+    for (int64_t i = 0; i < n; i++) {
         idx_t *labels1 = labels + i * k;
         float *dis1 = distances + i * k;
-        long j = 0;
+        int64_t j = 0;
         for (; j < k; j++) {
             if (instances.find (labels1[j]) != instances.end ()) {
                 // a duplicate: special handling
@@ -398,8 +347,8 @@ void IndexIVFFlatDedup::search_preassigned (
         }
         if (j < k) {
             // there are duplicates, special handling
-            long j0 = j;
-            long rp = j;
+            int64_t j0 = j;
+            int64_t rp = j;
             while (j < k) {
                 auto range = instances.equal_range (labels1[rp]);
                 float dis = dis1[rp];
@@ -423,7 +372,7 @@ void IndexIVFFlatDedup::search_preassigned (
 }
 
 
-long IndexIVFFlatDedup::remove_ids(const IDSelector& sel)
+size_t IndexIVFFlatDedup::remove_ids(const IDSelector& sel)
 {
     std::unordered_map<idx_t, idx_t> replace;
     std::vector<std::pair<idx_t, idx_t> > toadd;
@@ -457,11 +406,11 @@ long IndexIVFFlatDedup::remove_ids(const IDSelector& sel)
     FAISS_THROW_IF_NOT_MSG (!maintain_direct_map,
                     "direct map remove not implemented");
 
-    std::vector<long> toremove(nlist);
+    std::vector<int64_t> toremove(nlist);
 
 #pragma omp parallel for
-    for (long i = 0; i < nlist; i++) {
-        long l0 = invlists->list_size (i), l = l0, j = 0;
+    for (int64_t i = 0; i < nlist; i++) {
+        int64_t l0 = invlists->list_size (i), l = l0, j = 0;
         InvertedLists::ScopedIds idsi (invlists, i);
         while (j < l) {
             if (sel.is_member (idsi[j])) {
@@ -485,8 +434,8 @@ long IndexIVFFlatDedup::remove_ids(const IDSelector& sel)
         toremove[i] = l0 - l;
     }
     // this will not run well in parallel on ondisk because of possible shrinks
-    long nremove = 0;
-    for (long i = 0; i < nlist; i++) {
+    int64_t nremove = 0;
+    for (int64_t i = 0; i < nlist; i++) {
         if (toremove[i] > 0) {
             nremove += toremove[i];
             invlists->resize(
@@ -514,8 +463,7 @@ void IndexIVFFlatDedup::update_vectors (int , idx_t *, const float *)
 
 
 void IndexIVFFlatDedup::reconstruct_from_offset (
-         long , long ,
-         float* ) const
+         int64_t , int64_t , float* ) const
 {
     FAISS_THROW_MSG ("not implemented");
 }

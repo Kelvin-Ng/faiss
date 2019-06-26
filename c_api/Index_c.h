@@ -1,8 +1,7 @@
 /**
- * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD+Patents license found in the
+ * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
 
@@ -73,7 +72,7 @@ int faiss_Index_add(FaissIndex* index, idx_t n, const float* x);
  * @param index  opaque pointer to index object
  * @param xids   if non-null, ids to store for the vectors (size n)
  */
-int faiss_Index_add_with_ids(FaissIndex* index, idx_t n, const float* x, const long* xids);
+int faiss_Index_add_with_ids(FaissIndex* index, idx_t n, const float* x, const idx_t* xids);
 
 /** query n vectors of dimension d to the index.
  *
@@ -120,7 +119,7 @@ int faiss_Index_reset(FaissIndex* index);
  * @param index       opaque pointer to index object
  * @param nremove     output for the number of IDs removed
  */
-int faiss_Index_remove_ids(FaissIndex* index, const FaissIDSelector* sel, long* n_removed);
+int faiss_Index_remove_ids(FaissIndex* index, const FaissIDSelector* sel, size_t* n_removed);
 
 /** Reconstruct a stored vector (or an approximation if lossy coding)
  *

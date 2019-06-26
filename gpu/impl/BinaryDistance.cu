@@ -1,8 +1,7 @@
 /**
- * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD+Patents license found in the
+ * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
 
@@ -217,6 +216,13 @@ void runBinaryDistanceAnySize(Tensor<BinaryType, 2, true>& vecs,
       <<<grid, block, 0, stream>>>(
       vecs, query, outK, outV, k);
   }
+#if GPU_MAX_SELECTION_K >= 2048
+  else if (k <= 2048) {
+    binaryDistanceAnySize<2048, 8, BinaryType>
+      <<<grid, block, 0, stream>>>(
+      vecs, query, outK, outV, k);
+  }
+#endif
 }
 
 template <typename BinaryType, int ReductionLimit>
@@ -257,6 +263,13 @@ void runBinaryDistanceLimitSize(Tensor<BinaryType, 2, true>& vecs,
       <<<grid, block, 0, stream>>>(
       vecs, query, outK, outV, k);
   }
+#if GPU_MAX_SELECTION_K >= 2048
+  else if (k <= 2048) {
+    binaryDistanceLimitSize<2048, 8, BinaryType, ReductionLimit>
+      <<<grid, block, 0, stream>>>(
+      vecs, query, outK, outV, k);
+  }
+#endif
 }
 
 void runBinaryDistance(Tensor<unsigned char, 2, true>& vecs,
@@ -264,7 +277,7 @@ void runBinaryDistance(Tensor<unsigned char, 2, true>& vecs,
                        Tensor<int, 2, true>& outK,
                        Tensor<int, 2, true>& outV,
                        int k, cudaStream_t stream) {
-  FAISS_ASSERT(k <= 1024);
+  FAISS_ASSERT(k <= GPU_MAX_SELECTION_K);
   FAISS_ASSERT(vecs.getSize(1) == query.getSize(1));
 
   FAISS_ASSERT(outK.getSize(1) == k);
