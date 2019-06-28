@@ -46,6 +46,10 @@ class GpuIndexHQ : public GpuIndex {
       FAISS_ASSERT_MSG(false, "Not implemented");
     }
 
+    virtual bool addImplRequiresIDs_() const override {
+      return false;
+    }
+
     void reset() override {
       FAISS_ASSERT_MSG(false, "Not implemented");
     }
