@@ -91,7 +91,7 @@ class GpuIndex : public faiss::Index {
                            float* distances,
                            Index::idx_t* labels) const = 0;
 
-private:
+ private:
   /// Handles paged adds if the add set is too large, passes to
   /// addImpl_ to actually perform the add for the current page
   void addPaged_(int n,
@@ -103,6 +103,7 @@ private:
                 const float* x,
                 const Index::idx_t* ids);
 
+ protected:
   /// Calls searchImpl_ for a single page of GPU-resident data
   void searchNonPaged_(int n,
                        const float* x,
@@ -118,7 +119,6 @@ private:
                            float* outDistancesData,
                            Index::idx_t* outIndicesData) const;
 
- protected:
   /// Manages streams, cuBLAS handles and scratch memory for devices
   GpuResources* resources_;
 

@@ -62,6 +62,12 @@ class GpuIndexHQ : public GpuIndex {
         float* distances,
         faiss::Index::idx_t* labels) const override;
 
+    void search(Index::idx_t n,
+                const float* x,
+                Index::idx_t k,
+                float* distances,
+                Index::idx_t* labels) const override;
+
     int imiNprobeSquareLen_;
     int imiNprobeSideLen_;
     int secondStageNProbe_;

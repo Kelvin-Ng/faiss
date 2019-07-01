@@ -70,6 +70,87 @@ GpuIndexHQ::GpuIndexHQ(GpuResources* resources,
 }
 
 void
+GpuIndexHQ::search(Index::idx_t n,
+                   const float* x,
+                   Index::idx_t k,
+                   float* distances,
+                   Index::idx_t* labels) const {
+  FAISS_THROW_IF_NOT_MSG(this->is_trained, "Index not trained");
+
+  // For now, only support <= max int results
+  FAISS_THROW_IF_NOT_FMT(n <= (Index::idx_t) std::numeric_limits<int>::max(),
+                         "GPU index only supports up to %d indices",
+                         std::numeric_limits<int>::max());
+
+  // Maximum k-selection supported is based on the CUDA SDK
+  FAISS_THROW_IF_NOT_FMT(k <= (Index::idx_t) getMaxKSelection(),
+                         "GPU index only supports k <= %d (requested %d)",
+                         getMaxKSelection(),
+                         (int) k); // select limitation
+
+  if (n == 0 || k == 0) {
+    // nothing to search
+    return;
+  }
+
+  DeviceScope scope(device_);
+  auto stream = resources_->getDefaultStream(device_);
+
+  // We guarantee that the searchImpl_ will be called with device-resident
+  // pointers.
+
+  // The input vectors may be too large for the GPU, but we still
+  // assume that the output distances and labels are not.
+  // Go ahead and make space for output distances and labels on the
+  // GPU.
+  // If we reach a point where all inputs are too big, we can add
+  // another level of tiling.
+  auto outDistances =
+    toDevice<float, 2>(resources_, device_, distances, stream,
+                       {(int) n, (int) k});
+
+  int labels_dev = getDeviceForAddress(labels);
+  HostTensor<faiss::Index::idx_t, 2> outLabels;
+  if (labels_dev == -1) {
+    outLabels = HostTensor<faiss::Index::idx_t, 2>(labels, {(int)n, (int)k});
+  } else {
+    outLabels = HostTensor<faiss::Index::idx_t, 2>({(int)n, (int)k});
+  }
+
+  bool usePaged = false;
+
+  if (getDeviceForAddress(x) == -1) {
+    // It is possible that the user is querying for a vector set size
+    // `x` that won't fit on the GPU.
+    // In this case, we will have to handle paging of the data from CPU
+    // -> GPU.
+    // Currently, we don't handle the case where the output data won't
+    // fit on the GPU (e.g., n * k is too large for the GPU memory).
+    size_t dataSize = (size_t) n * this->d * sizeof(float);
+
+    if (dataSize >= minPagedSize_) {
+      searchFromCpuPaged_(n, x, k,
+                          outDistances.data(),
+                          outLabels.data());
+      usePaged = true;
+    }
+  }
+
+  if (!usePaged) {
+    searchNonPaged_(n, x, k,
+                    outDistances.data(),
+                    outLabels.data());
+  }
+
+  // Copy back if necessary
+  fromDevice<float, 2>(outDistances, distances, stream);
+  if (labels_dev != -1) {
+    DeviceTensor<faiss::Index::idx_t, 2> labelsTensor(labels, {(int)n, (int)k});
+    labelsTensor.copyFrom(outLabels, stream);
+  }
+}
+
+void
 GpuIndexHQ::searchImpl_(int n,
                         const float* x,
                         int k,
@@ -95,11 +176,6 @@ GpuIndexHQ::searchImpl_(int n,
   Tensor<faiss::Index::idx_t, 2, true> labelsTensor(labels, {(int)n, (int)k});
 
   index_->query(devX, imiNprobeSquareLen_, imiNprobeSideLen_, secondStageNProbe_, k, devDistances, labelsTensor);
-
-  // Copy back if necessary
-  fromDevice<float, 2>(devDistances, distances, stream);
-
-  cudaDeviceSynchronize();
 }
 
 } } // namespace
