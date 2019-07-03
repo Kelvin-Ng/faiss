@@ -160,22 +160,14 @@ GpuIndexHQ::searchImpl_(int n,
   FAISS_ASSERT(index_);
   FAISS_ASSERT(n > 0);
 
-  auto stream = resources_->getDefaultStream(device_);
-  auto& mem = resources_->getMemoryManager(device_);
+  // Data is already resident on the GPU
+  Tensor<float, 2, true> queries(const_cast<float*>(x), {n, (int) this->d});
+  Tensor<float, 2, true> deviceOutDistances(distances, {n, k});
 
-  // Make sure arguments are on the device we desire; use temporary
-  // memory allocations to move it if necessary
-  auto devX =
-    toDevice<float, 2>(resources_,
-                       device_,
-                       const_cast<float*>(x),
-                       stream,
-                       {(int) n, this->d});
+  static_assert(sizeof(long) == sizeof(Index::idx_t), "size mismatch");
+  Tensor<long, 2, true> outLabels(const_cast<long*>(labels), {n, k});
 
-  DeviceTensor<float, 2, true> devDistances(mem, {(int)n, (int)k}, stream);
-  Tensor<faiss::Index::idx_t, 2, true> labelsTensor(labels, {(int)n, (int)k});
-
-  index_->query(devX, imiNprobeSquareLen_, imiNprobeSideLen_, secondStageNProbe_, k, devDistances, labelsTensor);
+  index_->query(queries, imiNprobeSquareLen_, imiNprobeSideLen_, secondStageNProbe_, k, deviceOutDistances, outLabels);
 }
 
 } } // namespace
