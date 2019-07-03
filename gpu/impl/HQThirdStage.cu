@@ -13,6 +13,10 @@
 #include "../utils/DeviceTensor.cuh"
 #include "../utils/BlockSelectKernel.cuh"
 
+// TODO: debug only
+#include "../utils/HostTensor.cuh"
+#include "../utils/CopyUtils.cuh"
+
 namespace faiss { namespace gpu {
 
 __global__ void HQThirdStageConvertIndices(const Tensor<int, 3, true> indices, const Tensor<int, 2, true> toConvert, Tensor<int, 3, true> converted) {
@@ -53,6 +57,20 @@ void runHQThirdStage(const Tensor<float, 2, true>& deviceQueries,
     DeviceTensor<float, 2, true> deviceAllDistances(mem, {numQueries, numItems}, stream);
     // TODO: support inner product
     runHQThirdStageL2Distances(deviceQueries, deviceIndices, deviceListCodes1, deviceListCodes2, deviceCodewords1, deviceCodewords2, imiSize, numCodes2, deviceAllDistances, true, stream);
+
+    // TODO: debug only
+    HostTensor<float, 2, true> allDistances({numQueries, numItems});
+    fromDevice<float, 2>(deviceAllDistances, allDistances.data(), stream);
+    cudaDeviceSynchronize();
+
+    printf("======== third stage all distances ========\n");
+    for (int qid = 0; qid < numQueries; ++qid) {
+        for (int i = 0; i < numItems; ++i) {
+            printf("%f ", (float)allDistances[qid][i]);
+        }
+        printf("\n");
+    }
+    printf("===========================================\n");
 
     DeviceTensor<int, 2, true> deviceTmpIndices(mem, {numQueries, k}, stream);
     runBlockSelect(deviceAllDistances, deviceOutDistances, deviceTmpIndices, !l2Distance, k, stream);

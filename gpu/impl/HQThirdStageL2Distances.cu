@@ -20,6 +20,26 @@
 
 namespace faiss { namespace gpu {
 
+__device__ __forceinline__ void
+printCodewords2(int a, int b, int c, int d, float4 val) {
+    printf("codewords2[%d][%d][%d][%d]: (%f %f %f %f)\n", a, b, c, d, val.x, val.y, val.z, val.w);
+}
+
+__device__ __forceinline__ void
+printCodewords2(int a, int b, int c, int d, float val) {
+    printf("codewords2[%d][%d][%d][%d]: %f\n", a, b, c, d, val);
+}
+
+__device__ __forceinline__ void
+printCodewords1(int a, int b, int c, int d, float4 val) {
+    printf("codewords1[%d][%d][%d][%d]: (%f %f %f %f)\n", a, b, c, d, val.x, val.y, val.z, val.w);
+}
+
+__device__ __forceinline__ void
+printCodewords1(int a, int b, int c, int d, float val) {
+    printf("codewords1[%d][%d][%d][%d]: %f\n", a, b, c, d, val);
+}
+
 template <int numCodes2, typename T, typename TVec>
 __device__ __forceinline__ T
 HQThirdStageL2DistancesOneCol(const Tensor<TVec, 2, true>& queries,
@@ -50,10 +70,15 @@ HQThirdStageL2DistancesOneCol(const Tensor<TVec, 2, true>& queries,
   TVec my_codewords[1 + numCodes2];
 
   my_codewords[0] = codewords1[isSecondHalf][imiId[isSecondHalf]][code1][col - isSecondHalf * halfDim];
+  if (imiId[0] == 3353 && imiId[1] == 1055) {
+      printCodewords1(isSecondHalf, imiId[isSecondHalf], code1, col - isSecondHalf * halfDim, my_codewords[0]);
+  }
 #pragma unroll
   for (int i = 0; i < numCodes2 / 2; ++i) {
     my_codewords[1 + i * 2 + 0] = codewords2[i][0                    ][codes2[i * 2 + 0]][col];
     my_codewords[1 + i * 2 + 1] = codewords2[i][1 + codes2[i * 2 + 0]][codes2[i * 2 + 1]][col];
+    //printCodewords2(i, 0, codes2[i * 2 + 0], col, my_codewords[1 + i * 2 + 0]);
+    //printCodewords2(i, 1 + codes2[i * 2 + 0], codes2[i * 2 + 1], col, my_codewords[1 + i * 2 + 1]);
   }
 
 #pragma unroll
@@ -93,7 +118,8 @@ __global__ void HQThirdStageL2Distances(Tensor<TVec, 2, true> queries,
 
   if (lastRowTile) {
     // We are handling the very end of the input matrix rows
-    for (int row = 0; row < indices.getSize(0) - rowStart; ++row) {
+    for (int row = 0; row < indices.getSize(2) - rowStart; ++row) {
+      //printf("indices[0][%d][%d]: %d\n", qid, rowStart + row, (int)indices[0][qid][rowStart + row]);
       int imiId[2] = {indices[0][qid][rowStart + row], indices[1][qid][rowStart + row]};
       int fineId = indices[2][qid][rowStart + row];
       int listId = imiId[0] * imiSize + imiId[1];
@@ -126,6 +152,7 @@ __global__ void HQThirdStageL2Distances(Tensor<TVec, 2, true> queries,
 
 #pragma unroll
       for (int row = 0; row < RowTileSize; ++row) {
+        //printf("indices[0][%d][%d]: %d\n", qid, rowStart + row, (int)indices[0][qid][rowStart + row]);
         int imiId[2] = {indices[0][qid][rowStart + row], indices[1][qid][rowStart + row]};
         int fineId = indices[2][qid][rowStart + row];
         int listId = imiId[0] * imiSize + imiId[1];
@@ -143,6 +170,7 @@ __global__ void HQThirdStageL2Distances(Tensor<TVec, 2, true> queries,
 
 #pragma unroll
       for (int row = 0; row < RowTileSize; ++row) {
+        //printf("indices[0][%d][%d]: %d\n", qid, rowStart + row, (int)indices[0][qid][rowStart + row]);
         int imiId[2] = {indices[0][qid][rowStart + row], indices[1][qid][rowStart + row]};
         int fineId = indices[2][qid][rowStart + row];
         int listId = imiId[0] * imiSize + imiId[1];
